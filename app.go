@@ -19,7 +19,7 @@ import (
 
 func main() {
 	var cfgPath string
-	flag.StringVar(&cfgPath, "c", "./etc/railway_internal_config.yaml", "path to config file") //   "./etc/railway_internal_config.yaml"
+	flag.StringVar(&cfgPath, "c", "./etc/config.yaml", "path to config file") //   "./etc/railway_internal_config.yaml"
 	flag.Parse()
 
 	cfg := config.GetConfig(cfgPath)
