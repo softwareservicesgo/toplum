@@ -3,8 +3,8 @@ listen:
   type: port
   port: 8081
 storage:
-  host: ballast.proxy.rlwy.net
-  port: 20747
+  host: postgres.railway.internal
+  port: 5432
   database: railway
   username: postgres
   password: VPYmDoRaoayCTVcEVNXnQqQYDAcYmlHi
