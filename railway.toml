@@ -1,0 +1,7 @@
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "./out -c ./etc/railway_internal_config.yaml"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WS Availability Test</title>
+</head>
+<body>
+  <h2>Check Availability</h2>
+  <label>Restaurant ID: <input id="restaurantId" value="31"></label><br><br>
+  <label>Client ID: <input id="clientId" value="1"></label><br><br>
+  <label>Person Count: <input id="person_count" value="3"></label><br><br>
+  <button onclick="connectWS()">Check</button>
+
+  <h3>Result:</h3>
+  <pre id="output"></pre>
+
+  <script>
+    let socket;
+
+    function connectWS() {
+      const restaurantId = document.getElementById("restaurantId").value;
+      const clientId = document.getElementById("clientId").value;
+      const personCount = parseInt(document.getElementById("person_count").value, 10);
+
+      socket = new WebSocket(`ws://localhost:8081/api/v1/reservation/ws/availability/day/${restaurantId}/${clientId}`);
+
+      socket.onopen = () => {
+        console.log("WS connected");
+        // отправляем JSON на сервер с полем PersonCount
+        socket.send(JSON.stringify({ person_count: personCount }));
+      };
+
+      socket.onmessage = (event) => {
+        console.log("Response:", event.data);
+        document.getElementById("output").textContent =
+          JSON.stringify(JSON.parse(event.data), null, 2);
+      };
+
+      socket.onerror = (err) => {
+        console.error("WS error:", err);
+      };
+
+      socket.onclose = () => {
+        console.log("WS closed");
+      };
+    }
+  </script>
+</body>
+</html>

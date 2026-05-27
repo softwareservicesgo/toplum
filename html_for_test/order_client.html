@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Orders</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #080c12;
+        --surface: #0d1420;
+        --border: rgba(255, 255, 255, 0.07);
+        --accent: #00e5ff;
+        --accent2: #ff6b35;
+        --green: #00e676;
+        --red: #ff1744;
+        --text: #e2e8f0;
+        --muted: #4a5568;
+        --card: #111827;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Syne", sans-serif;
+        min-height: 100vh;
+        padding: 2rem;
+        background-image: radial-gradient(
+          ellipse 80% 50% at 50% -20%,
+          rgba(0, 229, 255, 0.05) 0%,
+          transparent 60%
+        );
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .logo-icon {
+        width: 36px;
+        height: 36px;
+        border: 1.5px solid var(--accent);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+      }
+      h1 {
+        font-size: 1.3rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: var(--text);
+      }
+      h1 span {
+        color: var(--accent);
+      }
+
+      .badge {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 0.3rem 0.8rem;
+        border-radius: 4px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .badge-on {
+        background: rgba(0, 230, 118, 0.12);
+        color: var(--green);
+        border: 1px solid rgba(0, 230, 118, 0.25);
+      }
+      .badge-off {
+        background: rgba(255, 23, 68, 0.12);
+        color: var(--red);
+        border: 1px solid rgba(255, 23, 68, 0.25);
+      }
+
+      /* ── Filters & search ── */
+      .toolbar {
+        display: flex;
+        gap: 0.6rem;
+        margin-bottom: 1.25rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .search-wrap {
+        position: relative;
+        flex: 1;
+        min-width: 180px;
+      }
+      .search-wrap input {
+        width: 100%;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 0.55rem 1rem 0.55rem 2.2rem;
+        border-radius: 8px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.8rem;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      .search-wrap input:focus {
+        border-color: var(--accent);
+      }
+      .search-wrap input::placeholder {
+        color: var(--muted);
+      }
+      .search-icon {
+        position: absolute;
+        left: 0.7rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--muted);
+        font-size: 0.85rem;
+        pointer-events: none;
+      }
+
+      .filter-btn {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        padding: 0.35rem 0.85rem;
+        border-radius: 6px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.7rem;
+        font-weight: 600;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        transition: all 0.15s;
+        white-space: nowrap;
+      }
+      .filter-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .filter-btn.active {
+        background: rgba(0, 229, 255, 0.1);
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      /* ── Orders list ── */
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.5rem;
+      }
+
+      .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.25rem;
+      }
+      .panel-title {
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      #ordersList {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        min-height: 200px;
+      }
+
+      .order-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1rem 1.15rem;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 1rem;
+        transition:
+          border-color 0.15s,
+          background 0.15s;
+      }
+      .order-card:hover {
+        border-color: rgba(0, 229, 255, 0.25);
+        background: #141e2e;
+      }
+
+      .order-num {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.8rem;
+        color: var(--accent);
+        font-weight: 600;
+        min-width: 48px;
+      }
+
+      .order-info .biz {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .order-info .meta {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.7rem;
+        color: var(--muted);
+        margin-top: 0.2rem;
+      }
+
+      .order-right {
+        text-align: right;
+      }
+      .order-price {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--green);
+      }
+
+      .status-tag {
+        display: inline-block;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.6rem;
+        font-weight: 600;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-top: 0.3rem;
+      }
+      .s-PENDING {
+        background: rgba(245, 158, 11, 0.12);
+        color: #f59e0b;
+      }
+      .s-APPROVED {
+        background: rgba(0, 230, 118, 0.12);
+        color: #00e676;
+      }
+      .s-COMPLETED {
+        background: rgba(0, 229, 255, 0.12);
+        color: #00e5ff;
+      }
+      .s-CANCELLED {
+        background: rgba(255, 23, 68, 0.12);
+        color: #ff1744;
+      }
+
+      .empty {
+        color: var(--muted);
+        text-align: center;
+        padding: 3rem 0;
+        font-size: 0.85rem;
+        font-family: "JetBrains Mono", monospace;
+      }
+
+      /* ── Pagination ── */
+      .pagination {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border);
+      }
+      .page-info {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.72rem;
+        color: var(--muted);
+      }
+      .page-info span {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      .page-controls {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+      }
+      .page-btn {
+        background: var(--card);
+        border: 1px solid var(--border);
+        color: var(--text);
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+      }
+      .page-btn:hover:not(:disabled) {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .page-btn:disabled {
+        opacity: 0.3;
+        cursor: default;
+      }
+      .page-num {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.75rem;
+        color: var(--muted);
+        padding: 0 0.4rem;
+      }
+
+      @media (max-width: 640px) {
+        .toolbar {
+          flex-direction: column;
+        }
+        .search-wrap {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div class="logo">
+          <div class="logo-icon">🛍️</div>
+          <h1>My<span>Orders</span></h1>
+        </div>
+        <div id="statusBadge" class="badge badge-on">LIVE</div>
+      </header>
+
+      <div class="toolbar">
+        <div class="search-wrap">
+          <span class="search-icon">⌕</span>
+          <input
+            type="text"
+            id="searchInput"
+            placeholder="Search orders..."
+            oninput="onSearch()"
+          />
+        </div>
+        <button
+          class="filter-btn active"
+          data-status=""
+          onclick="setStatus(this)"
+        >
+          All
+        </button>
+        <button
+          class="filter-btn"
+          data-status="PENDING"
+          onclick="setStatus(this)"
+        >
+          Pending
+        </button>
+        <button
+          class="filter-btn"
+          data-status="APPROVED"
+          onclick="setStatus(this)"
+        >
+          Approved
+        </button>
+        <button
+          class="filter-btn"
+          data-status="COMPLETED"
+          onclick="setStatus(this)"
+        >
+          Completed
+        </button>
+        <button
+          class="filter-btn"
+          data-status="CANCELLED"
+          onclick="setStatus(this)"
+        >
+          Cancelled
+        </button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Orders</span>
+          <span
+            id="totalCount"
+            style="
+              font-family: &quot;JetBrains Mono&quot;, monospace;
+              font-size: 0.72rem;
+              color: var(--muted);
+            "
+          ></span>
+        </div>
+
+        <div id="ordersList">
+          <div class="empty">Loading your orders…</div>
+        </div>
+
+        <div class="pagination">
+          <div class="page-info" id="pageInfo">—</div>
+          <div class="page-controls">
+            <button class="page-btn" id="btnPrev" onclick="prevPage()" disabled>
+              ‹
+            </button>
+            <span class="page-num" id="pageNum">—</span>
+            <button class="page-btn" id="btnNext" onclick="nextPage()" disabled>
+              ›
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const LIMIT = 5;
+      let offset = 1; // always starts at 0
+      let total = 0;
+      let curStatus = "";
+      let searchTimer = null;
+
+      let ws = null;
+
+      /* ── WS connect (token from query param or cookie) ── */
+      function getToken() {
+        const params = new URLSearchParams(location.search);
+        return params.get("token") || "";
+      }
+
+      function connect() {
+        const token = getToken();
+        const proto = location.protocol === "https:" ? "wss:" : "ws:";
+        const url = `${proto}//${location.host}/api/v1/order/ws/orderClient`;
+        //(token ? `?token=${encodeURIComponent(token)}` : "");
+
+        ws = new WebSocket(url);
+
+        ws.onopen = () => {
+          setConnected(true);
+          sendFilter();
+        };
+
+        ws.onmessage = (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            total = data.count || 0;
+            renderOrders(data.orders || []);
+            updatePagination();
+            document.getElementById("totalCount").textContent =
+              `total: ${total}`;
+          } catch {
+            /* ignore */
+          }
+        };
+
+        ws.onerror = () => setConnected(false);
+        ws.onclose = () => {
+          setConnected(false);
+          // reconnect after 3s
+          setTimeout(connect, 3000);
+        };
+      }
+
+      function setConnected(on) {
+        const el = document.getElementById("statusBadge");
+        el.textContent = on ? "LIVE" : "OFFLINE";
+        el.className = "badge " + (on ? "badge-on" : "badge-off");
+      }
+
+      /* ── Filter / search ── */
+      function sendFilter() {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        ws.send(
+          JSON.stringify({
+            limit: String(LIMIT),
+            offset: String(offset),
+            status: curStatus,
+            search: document.getElementById("searchInput").value.trim(),
+          }),
+        );
+      }
+
+      function setStatus(btn) {
+        document
+          .querySelectorAll(".filter-btn")
+          .forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        curStatus = btn.dataset.status;
+        offset = 0;
+        sendFilter();
+      }
+
+      function onSearch() {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+          offset = 0;
+          sendFilter();
+        }, 350);
+      }
+
+      /* ── Pagination ── */
+      function prevPage() {
+        if (offset === 0) return;
+        offset = Math.max(0, offset - LIMIT);
+        sendFilter();
+      }
+
+      function nextPage() {
+        if (offset + LIMIT >= total) return;
+        offset += 1; // +5 each page
+        sendFilter();
+      }
+
+      function updatePagination() {
+        const page = Math.floor(offset / LIMIT) + 1;
+        const pages = Math.max(1, Math.ceil(total / LIMIT));
+        const from = total === 0 ? 0 : offset + 1;
+        const to = Math.min(offset + LIMIT, total);
+
+        document.getElementById("pageInfo").innerHTML =
+          `<span>${from}–${to}</span> of <span>${total}</span>`;
+        document.getElementById("pageNum").textContent = `${page} / ${pages}`;
+        document.getElementById("btnPrev").disabled = offset === 0;
+        document.getElementById("btnNext").disabled = offset + LIMIT >= total;
+      }
+
+      /* ── Render ── */
+      function renderOrders(orders) {
+        const list = document.getElementById("ordersList");
+        if (!orders.length) {
+          list.innerHTML = '<div class="empty">No orders found.</div>';
+          return;
+        }
+        list.innerHTML = orders
+          .map((o) => {
+            const price =
+              o.general_bill != null
+                ? Number(o.general_bill).toFixed(2)
+                : "0.00";
+            const status = o.status || "UNKNOWN";
+            const bizName = o.businesses?.name || o.businesses_name || "—";
+            return `
+            <div class="order-card">
+              <div class="order-num">#${o.id}</div>
+              <div class="order-info">
+                <div class="biz">${bizName}</div>
+                <div class="meta">${o.count_items ?? 0} item(s)</div>
+              </div>
+              <div class="order-right">
+                <div class="order-price">${price} TMT</div>
+                <div><span class="status-tag s-${status}">${status}</span></div>
+              </div>
+            </div>`;
+          })
+          .join("");
+      }
+
+      // start
+      connect();
+    </script>
+  </body>
+</html>

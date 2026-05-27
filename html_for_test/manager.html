@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Менеджер бронирований</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 2rem;
+      background-color: #f8f8f8;
+      color: #333;
+    }
+    h1 {
+      color: #007bff;
+      border-bottom: 2px solid #ddd;
+      padding-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    h1 div {
+      display: flex;
+      gap: 10px;
+    }
+    select, input[type="text"], input[type="date"] {
+      padding: 6px 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 1em;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      background: #ffffff;
+      margin-bottom: 12px;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      display: flex;
+      align-items: flex-start;
+      transition: transform 0.2s;
+    }
+    li:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+    img.avatar {
+      width: 60px;
+      height: 60px;
+      object-fit: cover;
+      border-radius: 50%;
+      margin-right: 15px;
+      border: 2px solid #007bff;
+    }
+    .info {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.6;
+    }
+    .bill {
+      font-size: 1.2em;
+      font-weight: bold;
+      color: #28a745;
+      margin-top: 5px;
+    }
+    .coupon {
+      color: #ff6f00;
+      font-weight: 600;
+    }
+    .table-info {
+      color: #6c757d;
+      font-size: 0.9em;
+    }
+    .foods-list {
+      margin: 5px 0;
+      padding-left: 20px;
+    }
+    .foods-list li {
+      display: flex;
+      align-items: center;
+      margin-bottom: 3px;
+      font-size: 0.95em;
+    }
+    .foods-list img.food-img {
+      width: 40px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: 5px;
+      margin-right: 10px;
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+  <h1>
+    📋 Список бронирований
+    <div>
+      <select id="statusFilter">
+        <option value="">Все</option>
+        <option value="pending">Ожидает</option>
+        <option value="confirmed">Подтверждено</option>
+        <option value="completed">Завершено</option>
+        <option value="cancelled">Отменено</option>
+        <option value="no_show">Не пришел</option>
+      </select>
+      <input type="text" id="searchInput" placeholder="Поиск по имени">
+      <input type="date" id="dayInput">
+    </div>
+  </h1>
+
+  <ul id="reservations"><li>Загрузка бронирований...</li></ul>
+
+  <script>
+    const pathParts = window.location.pathname.split('/');
+    const restaurantId = pathParts[pathParts.length - 2];
+    const clientId = pathParts[pathParts.length - 1];
+
+    const list = document.getElementById("reservations");
+    const statusFilter = document.getElementById("statusFilter");
+    const searchInput = document.getElementById("searchInput");
+    const dayInput = document.getElementById("dayInput");
+
+    let socket;
+
+    // === Функция для рендера списка ===
+    function renderReservations(data) {
+      list.innerHTML = "";
+      const reservationsArray = Array.isArray(data?.reservations) ? data.reservations : data;
+
+      if (!reservationsArray || reservationsArray.length === 0) {
+        list.innerHTML = "<li>Нет бронирований в этом списке.</li>";
+        return;
+      }
+
+      reservationsArray.forEach(r => {
+        const li = document.createElement("li");
+        const client = r.client || {};
+        const clientName = client.full_name || 'Без имени';
+        const clientPhone = client.phone_number || 'Нет телефона';
+        const clientImg = client.image_path || '/default-avatar.png';
+
+        const coupon = r.client_coupon?.coupon_name?.ru
+          ? `<div class="coupon">🏷️ ${r.client_coupon.coupon_name.ru}</div>` : '';
+
+        const tableInfo = r.table
+          ? `<div class="table-info">Столик №${r.table.table_id ?? '?'} — ${r.table.seats ?? 0} мест</div>` : '';
+
+        let foodsInfo = '';
+        if (Array.isArray(r.foods) && r.foods.length > 0) {
+          foodsInfo = `<ul class="foods-list">`;
+          r.foods.forEach(f => {
+            const foodImg = f.food_image || '/default-food.png';
+            const foodName = f.food_name?.ru || f.food_name?.en || 'Блюдо';
+            const count = f.count || 0;
+            const price = f.value || 0;
+            foodsInfo += `<li><img class="food-img" src="${foodImg}" alt="${foodName}">${foodName} × ${count} — ${(price * count).toFixed(2)} TMT</li>`;
+          });
+          foodsInfo += `</ul>`;
+        }
+
+        const reason = r.reason ? `<div class="table-info">Причина: ${r.reason}</div>` : '';
+
+        const infoHTML = `
+          <strong>${clientName}</strong>
+          <div class="table-info">📞 ${clientPhone}</div>
+          <div class="table-info">🆔 ID ${r.id}</div>
+          <div class="table-info">🕒 ${r.reservation_date || '-'} (${r.reservation_time || 0} мин.)</div>
+          <div class="table-info">👥 ${r.person_count || 0} чел.</div>
+          ${tableInfo}
+          ${foodsInfo}
+          ${coupon}
+          <div class="bill">💰 ${(r.general_bill || 0).toFixed(2)} TMT</div>
+          <div class="table-info">📋 Статус: <b>${r.status}</b></div>
+          ${reason}
+        `;
+
+        const img = document.createElement("img");
+        img.className = "avatar";
+        img.src = clientImg;
+        img.alt = clientName;
+
+        const info = document.createElement("div");
+        info.className = "info";
+        info.innerHTML = infoHTML;
+
+        li.appendChild(img);
+        li.appendChild(info);
+        list.appendChild(li);
+      });
+    }
+
+    // === Получение списка бронирований ===
+    async function loadReservations() {
+      const status = statusFilter.value;
+      const search = searchInput.value;
+      const day = dayInput.value;
+
+      let url = `/api/v1/reservation/${restaurantId}?`;
+      if (status) url += `status=${status}&`;
+      if (search) url += `search=${encodeURIComponent(search)}&`;
+      if (day) url += `day=${day}&`;
+      url = url.slice(0, -1); // убираем лишний &
+
+      list.innerHTML = "<li>Загрузка...</li>";
+
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(res.status);
+        const data = await res.json();
+        renderReservations(data);
+      } catch (e) {
+        list.innerHTML = `<li>Ошибка загрузки: ${e.message}</li>`;
+      }
+    }
+
+    // === WebSocket ===
+    function connectWS() {
+      socket = new WebSocket(`ws://${window.location.host}/api/v1/reservation/ws/admin/${restaurantId}/${clientId}`);
+
+      socket.onopen = () => {
+        console.log("✅ WS connected");
+        sendStatusToServer();
+      };
+
+      socket.onclose = () => {
+        console.log("❌ WS disconnected, retrying...");
+        setTimeout(connectWS, 3000);
+      };
+
+      socket.onerror = e => console.error("❌ WS error:", e);
+
+      socket.onmessage = event => {
+        try {
+          const data = JSON.parse(event.data);
+          renderReservations(data);
+        } catch (e) {
+          console.error("❌ WS parse error:", e);
+        }
+      };
+    }
+
+    // === Отправка текущего статуса/фильтров на сервер ===
+    function sendStatusToServer() {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+          type: "change_filter",
+          status: statusFilter.value,
+          search: searchInput.value,
+          day: dayInput.value
+        }));
+      }
+    }
+
+    // === Инициализация ===
+    statusFilter.addEventListener("change", () => {
+  loadReservations();
+  sendStatusToServer(); // ✅ отправляем фильтр через WS
+});
+
+searchInput.addEventListener("input", () => {
+  loadReservations();
+  sendStatusToServer(); // ✅
+});
+
+dayInput.addEventListener("change", () => {
+  loadReservations();
+  sendStatusToServer(); // ✅
+});
+
+
+    loadReservations();
+    connectWS();
+  </script>
+</body>
+</html>

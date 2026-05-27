@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>WS Client Reservations</title>
+<style>
+body { font-family: Arial; }
+.res { border:1px solid #ccc; padding:10px; margin:5px; }
+</style>
+</head>
+<body>
+
+<h2>Мои бронирования (WS)</h2>
+
+<textarea id="token" rows="3" cols="80">
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6Nn0.wNGuwZWyyAF09-DZUoAlQ2sLVnxfqZy2R9L5kSYP54E
+</textarea><br><br>
+
+<button onclick="connect()">Connect</button>
+<button onclick="reload()">Reload</button>
+
+<div id="list"></div>
+
+<script>
+let ws;
+
+function connect() {
+  ws = new WebSocket("ws://localhost:8081/api/v1/reservation/reservationClient");
+
+  ws.onopen = () => {
+    console.log("connected");
+
+    // 🔐 auth message
+    ws.send(JSON.stringify({
+      token: document.getElementById("token").value.trim()
+    }));
+  };
+
+  ws.onmessage = e => {
+    const data = JSON.parse(e.data);
+    render(data);
+  };
+
+  ws.onerror = e => console.error(e);
+}
+
+function reload() {
+  ws.send(JSON.stringify({
+    limit: "10",
+    offset: "0"
+  }));
+}
+
+function render(data) {
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+
+  if (!data?.reservations?.length) {
+    list.innerHTML = "<p>Нет бронирований</p>";
+    return;
+  }
+
+  data.reservations.forEach(r => {
+    const d = document.createElement("div");
+    d.className = "res";
+    d.innerHTML = `
+      <b>Ресторан:</b> ${r.restaurant?.name?.ru}<br>
+      <b>Дата:</b> ${r.reservation_date}<br>
+      <b>Гостей:</b> ${r.person_count}<br>
+      <b>Статус:</b> ${r.status}
+    `;
+    list.appendChild(d);
+  });
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Order Detail</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #080c12;
+        --surface: #0d1420;
+        --border: rgba(255, 255, 255, 0.07);
+        --accent: #00e5ff;
+        --green: #00e676;
+        --red: #ff1744;
+        --amber: #f59e0b;
+        --text: #e2e8f0;
+        --muted: #4a5568;
+        --card: #111827;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Syne", sans-serif;
+        min-height: 100vh;
+        padding: 2rem;
+        background-image: radial-gradient(
+          ellipse 80% 50% at 50% -20%,
+          rgba(0, 229, 255, 0.05) 0%,
+          transparent 60%
+        );
+      }
+
+      .container {
+        max-width: 700px;
+        margin: 0 auto;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .logo-icon {
+        width: 36px;
+        height: 36px;
+        border: 1.5px solid var(--accent);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+      }
+      h1 {
+        font-size: 1.3rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      h1 span {
+        color: var(--accent);
+      }
+
+      .badge {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 0.3rem 0.8rem;
+        border-radius: 4px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .badge-on {
+        background: rgba(0, 230, 118, 0.12);
+        color: var(--green);
+        border: 1px solid rgba(0, 230, 118, 0.25);
+      }
+      .badge-off {
+        background: rgba(255, 23, 68, 0.12);
+        color: var(--red);
+        border: 1px solid rgba(255, 23, 68, 0.25);
+      }
+
+      /* ── Panel ── */
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.25rem;
+      }
+
+      .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.25rem;
+      }
+      .panel-title {
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      /* ── Order meta ── */
+      .order-id {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: var(--accent);
+        margin-bottom: 0.25rem;
+      }
+      .order-id-label {
+        font-size: 0.75rem;
+        color: var(--muted);
+        margin-bottom: 1.25rem;
+      }
+
+      .meta-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+      }
+
+      .meta-item label {
+        display: block;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.65rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 0.3rem;
+      }
+      .meta-item .val {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .meta-item .val.price {
+        font-family: "JetBrains Mono", monospace;
+        color: var(--green);
+        font-size: 1rem;
+      }
+
+      /* ── Status tag ── */
+      .status-tag {
+        display: inline-block;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.65rem;
+        font-weight: 600;
+        padding: 0.25rem 0.65rem;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .s-PENDING {
+        background: rgba(245, 158, 11, 0.12);
+        color: #f59e0b;
+      }
+      .s-APPROVED {
+        background: rgba(0, 230, 118, 0.12);
+        color: #00e676;
+      }
+      .s-COMPLETED {
+        background: rgba(0, 229, 255, 0.12);
+        color: #00e5ff;
+      }
+      .s-CANCELLED {
+        background: rgba(255, 23, 68, 0.12);
+        color: #ff1744;
+      }
+
+      /* ── Items table ── */
+      .items-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .items-table th {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+      }
+      .items-table td {
+        padding: 0.65rem 0.75rem;
+        font-size: 0.85rem;
+        color: var(--text);
+        border-bottom: 1px solid var(--border);
+      }
+      .items-table tr:last-child td {
+        border-bottom: none;
+      }
+      .items-table .td-price {
+        font-family: "JetBrains Mono", monospace;
+        color: var(--green);
+        text-align: right;
+      }
+      .items-table .td-qty {
+        font-family: "JetBrains Mono", monospace;
+        color: var(--muted);
+        text-align: center;
+      }
+      .items-table .td-total {
+        font-family: "JetBrains Mono", monospace;
+        color: var(--accent);
+        text-align: right;
+        font-weight: 600;
+      }
+
+      /* ── Total row ── */
+      .total-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 1rem;
+        margin-top: 0.5rem;
+        border-top: 1px solid var(--border);
+      }
+      .total-label {
+        font-size: 0.8rem;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .total-val {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: var(--green);
+      }
+
+      .empty {
+        color: var(--muted);
+        text-align: center;
+        padding: 3rem 0;
+        font-size: 0.85rem;
+        font-family: "JetBrains Mono", monospace;
+      }
+
+      /* ── Update pulse ── */
+      @keyframes pulse-border {
+        0% {
+          border-color: rgba(0, 229, 255, 0.6);
+        }
+        100% {
+          border-color: var(--border);
+        }
+      }
+      .updated {
+        animation: pulse-border 1s ease-out forwards;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div class="logo">
+          <div class="logo-icon">📋</div>
+          <h1>Order<span>Detail</span></h1>
+        </div>
+        <div id="statusBadge" class="badge badge-on">LIVE</div>
+      </header>
+
+      <!-- Order info panel -->
+      <div class="panel" id="infoPanel">
+        <div id="orderMeta">
+          <div class="empty">Connecting…</div>
+        </div>
+      </div>
+
+      <!-- Items panel -->
+      <div class="panel" id="itemsPanel" style="display: none">
+        <div class="panel-header">
+          <span class="panel-title">Items</span>
+          <span
+            id="itemCount"
+            style="
+              font-family: &quot;JetBrains Mono&quot;, monospace;
+              font-size: 0.72rem;
+              color: var(--muted);
+            "
+          ></span>
+        </div>
+        <div id="itemsWrap"></div>
+      </div>
+    </div>
+
+    <script>
+      // orderId from URL path: /ws/:id
+      const pathParts = location.pathname.split("/").filter(Boolean);
+      const orderId = pathParts[pathParts.length - 1];
+
+      function getToken() {
+        return new URLSearchParams(location.search).get("token") || "";
+      }
+
+      let ws = null;
+      let reconnecting = false;
+
+      const role = new URLSearchParams(location.search).get("role") || "client";
+
+      function connect() {
+        const token = getToken();
+        const proto = location.protocol === "https:" ? "wss:" : "ws:";
+
+        let params = `role=${encodeURIComponent(role)}`;
+        if (token) params += `&token=${encodeURIComponent(token)}`;
+
+        //  const url = `${proto}//${location.host}/api/v1/order/ws/orderOne/${orderId}?${params}`;
+        const url = `${proto}//${location.host}/api/v1/order/ws/${orderId}?${params}`;
+
+        ws = new WebSocket(url);
+
+        ws.onopen = () => {
+          reconnecting = false;
+          setConnected(true);
+        };
+
+        ws.onerror = () => {
+          /* onclose işlär */
+        };
+
+        ws.onclose = () => {
+          if (!reconnecting) {
+            reconnecting = true;
+            setTimeout(() => {
+              reconnecting = false;
+              connect();
+            }, 500);
+          }
+        };
+
+        ws.onmessage = (e) => {
+          try {
+            const order = JSON.parse(e.data);
+            renderOrder(order);
+          } catch {}
+        };
+      }
+
+      function setConnected(on) {
+        const el = document.getElementById("statusBadge");
+        el.textContent = on ? "LIVE" : "OFFLINE";
+        el.className = "badge " + (on ? "badge-on" : "badge-off");
+      }
+
+      function renderOrder(o) {
+        const status = o.status || "UNKNOWN";
+        const price = Number(o.general_bill || 0).toFixed(2);
+        const client = o.client?.full_name || "—";
+        const biz = o.businesses?.name || o.businesses_name || "—";
+        const items = o.order_items || o.items || [];
+        const created = o.created_at
+          ? new Date(o.created_at).toLocaleString()
+          : "—";
+
+        // meta panel
+        const meta = document.getElementById("orderMeta");
+        meta.innerHTML = `
+          <div class="order-id">#${o.id}</div>
+          <div class="order-id-label">Order ID</div>
+          <div class="meta-grid">
+            <div class="meta-item">
+              <label>Status</label>
+              <div class="val"><span class="status-tag s-${status}">${status}</span></div>
+            </div>
+            <div class="meta-item">
+              <label>Total</label>
+              <div class="val price">${price} TMT</div>
+            </div>
+            <div class="meta-item">
+              <label>Client</label>
+              <div class="val">${client}</div>
+            </div>
+            <div class="meta-item">
+              <label>Restaurant</label>
+              <div class="val">${biz}</div>
+            </div>
+            <div class="meta-item">
+              <label>Created</label>
+              <div class="val" style="font-size:0.8rem;">${created}</div>
+            </div>
+            <div class="meta-item">
+              <label>Items</label>
+              <div class="val">${items.length} item(s)</div>
+            </div>
+          </div>`;
+
+        // pulse animation on update
+        const panel = document.getElementById("infoPanel");
+        panel.classList.remove("updated");
+        void panel.offsetWidth;
+        panel.classList.add("updated");
+
+        // items panel
+        if (items.length) {
+          document.getElementById("itemsPanel").style.display = "block";
+          document.getElementById("itemCount").textContent =
+            `${items.length} item(s)`;
+
+          let rows = items
+            .map((item) => {
+              const unitPrice = Number(item.price || 0).toFixed(2);
+              const qty = item.quantity || item.count || 1;
+              const total = (Number(item.price || 0) * qty).toFixed(2);
+              const name = item.product?.name || item.name || "—";
+              return `
+              <tr>
+                <td>${name}</td>
+                <td class="td-qty">${qty}</td>
+                <td class="td-price">${unitPrice}</td>
+                <td class="td-total">${total} TMT</td>
+              </tr>`;
+            })
+            .join("");
+
+          document.getElementById("itemsWrap").innerHTML = `
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th style="text-align:center;">Qty</th>
+                  <th style="text-align:right;">Price</th>
+                  <th style="text-align:right;">Total</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+            <div class="total-row">
+              <span class="total-label">Grand Total</span>
+              <span class="total-val">${price} TMT</span>
+            </div>`;
+        } else {
+          document.getElementById("itemsPanel").style.display = "none";
+        }
+      }
+
+      connect();
+    </script>
+  </body>
+</html>

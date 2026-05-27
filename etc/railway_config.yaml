@@ -1,0 +1,31 @@
+is_debug: true
+listen:
+  type: port
+  port: 8081
+storage:
+  host: maglev.proxy.rlwy.net
+  port: 32097
+  database: railway
+  username: postgres
+  password: ZknwQMIFFWHQfQBVRdwqlFTFzxZRCEhF
+  pg_pool_max_conn: 100
+app_version: 0.0.1
+public_file_path: ./uploads
+jwt_key: eyJhbGciI2W8NvugFqHRY
+secret_key: eyJhwerweirhweoirewiurhiI2W8NvugFqHRY
+
+SMS_SENDER:
+  BasicOptMsg: 'Hormatly müşderi sizin tassykalýjy kodynyz: %d' # !!! IT SHOULD HAVE EXACTLY ONE '%d' TO REPLACE WITH CODE!!!
+
+Redis:
+  Addr: "maglev.proxy.rlwy.net:46113"
+  Password: "BEyHzSTItxFTcGElfXVUqeGVvJzJPejk"
+  ClientName: "reserve-table"
+  MaxRetries: 3
+  DailTimeout: 5
+  ReadTimeout: 3
+  WriteTimeout: 3
+  IdleTimeout: 40
+  MaxConnLifeTime: 60
+  MinIdleConn: 2
+  PoolSize: 3
