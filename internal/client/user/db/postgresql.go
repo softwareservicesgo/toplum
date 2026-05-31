@@ -283,10 +283,8 @@ func (r *repository) UpdateProfile(ctx context.Context, userId int, users user.U
 	}
 
 	if image != nil && *image != "" {
-		imagges := []string{
-			*image,
-		}
-		utils.DropFiles(&imagges)
+		images := []string{*image}
+		utils.DropFiles(&images)
 	}
 
 	var provinceId int
@@ -296,21 +294,22 @@ func (r *repository) UpdateProfile(ctx context.Context, userId int, users user.U
 		return nil, appresult.ErrNotFoundType(users.ProvinceId, "province")
 	}
 
-	if oldDistrictDictId != nil {
-		q = `DELETE FROM dictionary WHERE id = $1`
-		_, err = r.client.Exec(ctx, q, *oldDistrictDictId)
-		if err != nil {
-			fmt.Println("error delete old district dictionary:", err)
-			return nil, appresult.ErrInternalServer
-		}
-	}
-
 	if users.District != nil {
-		q = `INSERT INTO dictionary (tm, en, ru) VALUES ($1, $2, $3) RETURNING id`
-		err = r.client.QueryRow(ctx, q, users.District.Tm, users.District.En, users.District.Ru).Scan(&districtId)
-		if err != nil {
-			fmt.Println("error insert district dictionary:", err)
-			return nil, appresult.ErrInternalServer
+		if oldDistrictDictId != nil {
+			q = `UPDATE dictionary SET tm = $1, en = $2, ru = $3 WHERE id = $4`
+			_, err = r.client.Exec(ctx, q, users.District.Tm, users.District.En, users.District.Ru, *oldDistrictDictId)
+			if err != nil {
+				fmt.Println("error update district dictionary:", err)
+				return nil, appresult.ErrInternalServer
+			}
+			districtId = oldDistrictDictId
+		} else {
+			q = `INSERT INTO dictionary (tm, en, ru) VALUES ($1, $2, $3) RETURNING id`
+			err = r.client.QueryRow(ctx, q, users.District.Tm, users.District.En, users.District.Ru).Scan(&districtId)
+			if err != nil {
+				fmt.Println("error insert district dictionary:", err)
+				return nil, appresult.ErrInternalServer
+			}
 		}
 	}
 

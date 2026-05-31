@@ -28,7 +28,7 @@ type UserReqDTO struct {
 	LastName   *string        `json:"last_name"`
 	ProvinceId int            `json:"province_id" binding:"required,min=1"`
 	District   *DictionaryDTO `json:"district"`
-	Password   string         `json:"password"    binding:"required"`
+	Password   string         `json:"password" binding:"required,min=8,max=50"`
 }
 
 type Profile struct {
@@ -37,7 +37,7 @@ type Profile struct {
 	LastName      *string        `json:"last_name"`
 	PhoneNumber   string         `json:"phone_number"`
 	ImagePath     *string        `json:"image_path"`
-	Address      DictionaryDTO  `json:"address"`
+	Address       DictionaryDTO  `json:"address"`
 	Organizations []Organization `json:"organizations"`
 }
 

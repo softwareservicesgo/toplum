@@ -155,6 +155,14 @@ func (h *handler) createProfile(c *gin.Context) {
 		appresult.HandleError(c, err)
 		return
 	}
+	if user.Name == "" || user.ProvinceId == 0 || user.Password == "" {
+		c.JSON(http.StatusInternalServerError, appresult.ErrRequiredData)
+		return
+	}
+	if len(user.Password) < 8 || 50 < len(user.Password) {
+		c.JSON(http.StatusInternalServerError, appresult.ErrPasswordLength)
+		return
+	}
 
 	uploadDir := filepath.Join("uploads/user")
 	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
@@ -224,6 +232,15 @@ func (h *handler) update(c *gin.Context) {
 			appresult.HandleError(c, err)
 			return
 		}
+	}
+
+	if user.Name == "" || user.ProvinceId == 0 || user.Password == "" {
+		c.JSON(http.StatusInternalServerError, appresult.ErrRequiredData)
+		return
+	}
+	if len(user.Password) < 8 || 50 < len(user.Password) {
+		c.JSON(http.StatusInternalServerError, appresult.ErrPasswordLength)
+		return
 	}
 
 	uploadDir := filepath.Join("uploads/user")

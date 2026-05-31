@@ -51,6 +51,8 @@ var (
 	ErrWrongs              = NewAppError(nil, "wrong", "SE-00001")
 	ErrComment             = NewAppError(nil, "the length of the comment should not exceed 720 characters.", "SE-00001")
 	ErrNameOrPhoneNumber   = NewAppError(nil, "name and phone number must not be empty", "SE-00001")
+	ErrPasswordLength      = NewAppError(nil, "password must be between 8 and 50 characters", "SE-00001")
+	ErrRequiredData        = NewAppError(nil, "Insufficient data. Required fields must be provided", "SE-00001")
 )
 
 var ErrNotFoundType = func(id int, field string) *AppError {
