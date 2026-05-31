@@ -37,7 +37,7 @@ type Profile struct {
 	LastName      *string        `json:"last_name"`
 	PhoneNumber   string         `json:"phone_number"`
 	ImagePath     *string        `json:"image_path"`
-	Location      DictionaryDTO  `json:"location"`
+	Address      DictionaryDTO  `json:"address"`
 	Organizations []Organization `json:"organizations"`
 }
 
