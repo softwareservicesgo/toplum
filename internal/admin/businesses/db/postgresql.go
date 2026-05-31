@@ -52,7 +52,7 @@ func (r *repository) Create(ctx context.Context, userId int, dto businesses.Busi
 	err = tx.QueryRow(ctx, q, dto.ProvinceId).Scan(&provinceId)
 	if err != nil {
 		fmt.Println("error:", err)
-		return nil, appresult.ErrNotFoundType(provinceId, "provinces")
+		return nil, appresult.ErrNotFoundType(provinceId, "province")
 	}
 
 	if dto.CategoryId != nil {

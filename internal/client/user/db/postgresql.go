@@ -67,9 +67,10 @@ func (r *repository) Register(ctx context.Context, dto user.RegisterDTO) (int, e
 	return randomNumber, nil
 }
 
-func (r *repository) CheckOTP(ctx context.Context, dto user.CheckOTP) (*user.ResultsOTP, error) {
+func (r *repository) CheckOTP(ctx context.Context, dto user.CheckOTP) (*user.ResultsOTP, *int, error) {
 	var (
 		users          user.ResultsOTP
+		userId         int
 		otp            int
 		name, lastName *string
 	)
@@ -78,14 +79,14 @@ func (r *repository) CheckOTP(ctx context.Context, dto user.CheckOTP) (*user.Res
 			FROM users
 			WHERE phone_number = $1
 		`
-	err := r.client.QueryRow(ctx, q, dto.PhoneNumber).Scan(&users.UserId, &otp, &name, &lastName)
+	err := r.client.QueryRow(ctx, q, dto.PhoneNumber).Scan(&userId, &otp, &name, &lastName)
 
 	if err != nil {
-		return nil, appresult.ErrNotFoundTypeStr(dto.PhoneNumber)
+		return nil, nil, appresult.ErrNotFoundTypeStr(dto.PhoneNumber)
 	}
 
 	if dto.Code != otp {
-		return nil, appresult.ErrOTP
+		return nil, nil, appresult.ErrOTP
 	}
 
 	if name == nil && lastName == nil {
@@ -99,17 +100,18 @@ func (r *repository) CheckOTP(ctx context.Context, dto user.CheckOTP) (*user.Res
 		SET otp = 0
 		WHERE id = $1;
 	`
-	_, err = r.client.Exec(ctx, q, users.UserId)
+	_, err = r.client.Exec(ctx, q, userId)
 	if err != nil {
-		return nil, appresult.ErrInternalServer
+		return nil, nil, appresult.ErrInternalServer
 	}
 
-	return &users, nil
+	return &users, &userId, nil
 }
 
-func (r *repository) Login(ctx context.Context, dto user.LoginDTO) (*user.ResultsOTP, error) {
+func (r *repository) Login(ctx context.Context, dto user.LoginDTO) (*user.ResultsOTP, *int, error) {
 	var (
 		users          user.ResultsOTP
+		userId         int
 		password       *string
 		name, lastName *string
 	)
@@ -118,18 +120,18 @@ func (r *repository) Login(ctx context.Context, dto user.LoginDTO) (*user.Result
 			FROM users
 			WHERE phone_number = $1
 		`
-	err := r.client.QueryRow(ctx, q, dto.PhoneNumber).Scan(&users.UserId, &password, &name, &lastName)
+	err := r.client.QueryRow(ctx, q, dto.PhoneNumber).Scan(&userId, &password, &name, &lastName)
 
 	if err != nil {
-		return nil, appresult.ErrNotFoundTypeStr("phone number")
+		return nil, nil, appresult.ErrNotFoundTypeStr("phone number")
 	}
 
 	if password == nil || dto.Password == "" {
-		return nil, appresult.ErrNotFoundTypeStr("password")
+		return nil, nil, appresult.ErrNotFoundTypeStr("password")
 	}
 
 	if bcrypt.CompareHashAndPassword([]byte(*password), []byte(dto.Password)) != nil {
-		return nil, appresult.ErrWrong("password")
+		return nil, nil, appresult.ErrWrong("password")
 	}
 
 	if name == nil && lastName == nil {
@@ -138,30 +140,41 @@ func (r *repository) Login(ctx context.Context, dto user.LoginDTO) (*user.Result
 		users.IsFirst = false
 	}
 
-	return &users, nil
+	return &users, &userId, nil
 }
 
-func (r *repository) CreateProfile(ctx context.Context, userId int, user user.UserReqDTO, imagePath, hashPassword string, baseURL string) (*user.Profile, error) {
+func (r *repository) CreateProfile(ctx context.Context, userId int, user user.UserReqDTO, imagePath *string, hashPassword string, baseURL string) (*user.Profile, error) {
 	var (
-		id int
+		id, province_id int
+		districtId      *int
 	)
-	q := `
-			SELECT id
-			FROM users
-			WHERE id = $1
-		`
+	q := `SELECT id FROM users WHERE id = $1`
 	err := r.client.QueryRow(ctx, q, userId).Scan(&id)
-
 	if err != nil {
 		return nil, appresult.ErrNotFoundType(userId, "user")
 	}
 
+	q = `SELECT id FROM provinces WHERE id = $1`
+	err = r.client.QueryRow(ctx, q, user.ProvinceId).Scan(&province_id)
+	if err != nil {
+		return nil, appresult.ErrNotFoundType(province_id, "province")
+	}
+
+	if user.District != nil {
+		queryDictionary := `INSERT INTO dictionary (tm, en, ru) VALUES ($1, $2, $3) RETURNING id`
+		err = r.client.QueryRow(ctx, queryDictionary, user.District.Tm, user.District.En, user.District.Ru).Scan(&districtId)
+		if err != nil {
+			fmt.Println("error insert district dictionary:", err)
+			return nil, appresult.ErrInternalServer
+		}
+	}
+
 	q = `
 		UPDATE users
-		SET name = $1, last_name = $2, image_path = $3, location = $4, password = $5
-		WHERE id = $6;
+		SET name = $1, last_name = $2, image_path = $3, district_dictionary_id = $4, province_id = $5, password = $6
+		WHERE id = $7;
 	`
-	_, err = r.client.Exec(ctx, q, user.Name, user.LastName, imagePath, user.Location, hashPassword, id)
+	_, err = r.client.Exec(ctx, q, user.Name, user.LastName, imagePath, districtId, user.ProvinceId, hashPassword, id)
 	if err != nil {
 		return nil, appresult.ErrInternalServer
 	}
@@ -179,9 +192,32 @@ func (r *repository) GetProfile(ctx context.Context, userId int, baseURL string)
 		profile user.Profile
 	)
 	q := `
-			SELECT id, name, last_name, phone_number, image_path, location
-			FROM users
-			WHERE id = $1
+			SELECT 
+    u.id, 
+    u.name, 
+    u.last_name, 
+    u.phone_number, 
+    u.image_path, 
+    CASE 
+        WHEN d_district.tm IS NOT NULL 
+        THEN (p_name.tm || ', ' || d_district.tm)
+        ELSE p_name.tm
+    END,
+    CASE 
+        WHEN d_district.en IS NOT NULL 
+        THEN (p_name.en || ', ' || d_district.en)
+        ELSE p_name.en
+    END,
+    CASE 
+        WHEN d_district.ru IS NOT NULL 
+        THEN (p_name.ru || ', ' || d_district.ru)
+        ELSE p_name.ru
+    END
+		FROM users u
+		JOIN provinces p        ON u.province_id = p.id
+		JOIN dictionary p_name  ON p.name_dictionary_id = p_name.id
+		LEFT JOIN dictionary d_district ON u.district_dictionary_id = d_district.id  -- LEFT JOIN!
+		WHERE u.id = $1
 		`
 	err := r.client.QueryRow(ctx, q, userId).Scan(
 		&profile.Id,
@@ -189,16 +225,17 @@ func (r *repository) GetProfile(ctx context.Context, userId int, baseURL string)
 		&profile.LastName,
 		&profile.PhoneNumber,
 		&profile.ImagePath,
-		&profile.Location,
+		&profile.Location.Tm, &profile.Location.Ru, &profile.Location.En,
 	)
 
 	if err != nil {
 		return nil, appresult.ErrNotFoundType(userId, "user")
 	}
 
-	if profile.ImagePath != "" && baseURL != "" {
-		cleanPath := strings.ReplaceAll(profile.ImagePath, "\\", "/")
-		profile.ImagePath = fmt.Sprintf("%s/%s", baseURL, cleanPath)
+	if profile.ImagePath != nil && *profile.ImagePath != "" && baseURL != "" {
+		cleanPath := strings.ReplaceAll(*profile.ImagePath, "\\", "/")
+		newUrl := fmt.Sprintf("%s/%s", baseURL, cleanPath)
+		profile.ImagePath = &newUrl
 	}
 
 	q = `
@@ -232,36 +269,59 @@ func (r *repository) GetProfile(ctx context.Context, userId int, baseURL string)
 	return &profile, nil
 }
 
-func (r *repository) UpdateProfile(ctx context.Context, userId int, users user.UserUpdateDTO, imagePath, hashPassword string, baseURL string) (*user.Profile, error) {
+func (r *repository) UpdateProfile(ctx context.Context, userId int, users user.UserReqDTO, imagePath *string, hashPassword string, baseURL string) (*user.Profile, error) {
 	var (
-		image string
+		image             *string
+		districtId        *int
+		oldDistrictDictId *int
 	)
-	q := `
-			SELECT image_path
-			FROM users
-			WHERE id = $1
-		`
-	err := r.client.QueryRow(ctx, q, userId).Scan(&image)
 
+	q := `SELECT image_path, district_dictionary_id FROM users WHERE id = $1`
+	err := r.client.QueryRow(ctx, q, userId).Scan(&image, &oldDistrictDictId)
 	if err != nil {
 		return nil, appresult.ErrNotFoundType(userId, "user")
 	}
 
-	if image != "" {
+	if image != nil && *image != "" {
 		imagges := []string{
-			image,
+			*image,
 		}
 		utils.DropFiles(&imagges)
 	}
 
+	var provinceId int
+	q = `SELECT id FROM provinces WHERE id = $1`
+	err = r.client.QueryRow(ctx, q, users.ProvinceId).Scan(&provinceId)
+	if err != nil {
+		return nil, appresult.ErrNotFoundType(users.ProvinceId, "province")
+	}
+
+	if oldDistrictDictId != nil {
+		q = `DELETE FROM dictionary WHERE id = $1`
+		_, err = r.client.Exec(ctx, q, *oldDistrictDictId)
+		if err != nil {
+			fmt.Println("error delete old district dictionary:", err)
+			return nil, appresult.ErrInternalServer
+		}
+	}
+
+	if users.District != nil {
+		q = `INSERT INTO dictionary (tm, en, ru) VALUES ($1, $2, $3) RETURNING id`
+		err = r.client.QueryRow(ctx, q, users.District.Tm, users.District.En, users.District.Ru).Scan(&districtId)
+		if err != nil {
+			fmt.Println("error insert district dictionary:", err)
+			return nil, appresult.ErrInternalServer
+		}
+	}
+
 	q = `
 		UPDATE users
-		SET name = $1, last_name = $2, image_path = $3, location = $4, password = $5
-		WHERE id = $6;
+		SET name = $1, last_name = $2, image_path = $3, district_dictionary_id = $4, province_id = $5, password = $6
+		WHERE id = $7
 	`
-	_, err = r.client.Exec(ctx, q, users.Name, users.LastName, imagePath, users.Location, hashPassword, userId)
+	_, err = r.client.Exec(ctx, q, users.Name, users.LastName, imagePath, districtId, users.ProvinceId, hashPassword, userId)
 	if err != nil {
-		fmt.Println("error: ", err)
+		fmt.Println("error update user:", err)
 		return nil, appresult.ErrInternalServer
 	}
 

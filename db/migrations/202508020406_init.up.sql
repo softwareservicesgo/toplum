@@ -48,8 +48,8 @@ CREATE TABLE  IF NOT EXISTS provinces (
     "created_at" TIMESTAMP DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')  NOT NULL
     );
 
-INSERT INTO users (name, phone_number, password)
-    VALUES ('admin', '+99363652268', '$2a$10$XDiLCdamxsncrl5ncl3GlujwXQDi/euWt.00V4dkXXIW4WB57sTNa');
+INSERT INTO users (name, phone_number, password, province_id)
+    VALUES ('admin', '+99363652268', '$2a$10$XDiLCdamxsncrl5ncl3GlujwXQDi/euWt.00V4dkXXIW4WB57sTNa', 1);
 
     CREATE TABLE IF NOT EXISTS categories (
     "id" bigserial PRIMARY KEY,

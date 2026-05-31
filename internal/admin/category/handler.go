@@ -88,7 +88,7 @@ func (h *handler) create(c *gin.Context) {
 
 	baseURL := c.MustGet("baseURL").(string)
 
-	resp, err := h.repository.Create(context.TODO(), category, imagePath, baseURL)
+	resp, err := h.repository.Create(context.TODO(), category, *imagePath, baseURL)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -178,11 +178,12 @@ func (h *handler) update(c *gin.Context) {
 
 	if err == nil {
 
-		imagePath, err = utils.SaveUploadedFile(c, image, uploadDir)
+		imagePathNew, err := utils.SaveUploadedFile(c, image, uploadDir)
 		if err != nil {
 			appresult.HandleError(c, err)
 			return
 		}
+		imagePath = *imagePathNew
 
 	}
 

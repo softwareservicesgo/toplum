@@ -81,8 +81,8 @@ func ExtractUserIdFromToken(c *gin.Context, db *pgxpool.Pool) (int, error) {
 	}
 
 	if len(tokenString) < 7 || tokenString[:7] != "Bearer " {
-			return 0, appresult.ErrBadToken
-		}
+		return 0, appresult.ErrBadToken
+	}
 
 	tokenString = tokenString[7:]
 	token, err := ParseToken(tokenString)
@@ -123,15 +123,15 @@ func ParseToken(jwtToken string) (*jwt.Token, error) {
 	return token, nil
 }
 
-func SaveUploadedFile(c *gin.Context, file *multipart.FileHeader, uploadDir string) (string, error) {
+func SaveUploadedFile(c *gin.Context, file *multipart.FileHeader, uploadDir string) (*string, error) {
 	cleanName := strings.ReplaceAll(filepath.Base(file.Filename), " ", "")
 	fileName := fmt.Sprintf("%d_%s", time.Now().UnixNano(), cleanName)
 	filePath := filepath.Join(uploadDir, fileName)
 
 	if err := c.SaveUploadedFile(file, filePath); err != nil {
-		return "", err
+		return nil, err
 	}
-	return filePath, nil
+	return &filePath, nil
 }
 
 func UniqueNumberGenerator(min, max int) int {

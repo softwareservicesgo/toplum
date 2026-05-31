@@ -30,7 +30,7 @@ var (
 	ErrTokenInBlacklist   = NewAppError(nil, "token is blacklisted", "SE-00002")
 	ErrAlreadyDataa       = NewAppError(nil, "not found", "SE-00004")
 	ErrForbidden          = NewAppError(nil, "you don't have access", "SE-00003")
-	ErrInvalitJson = func(data interface{}) *AppError {
+	ErrInvalitJson        = func(data interface{}) *AppError {
 		return NewAppError(nil, fmt.Sprintf("invalid JSON data: %v", data), "SE-00001")
 	}
 	ErrNotMainImage        = NewAppError(nil, "mainImage required", "SE-00001")
@@ -53,42 +53,42 @@ var (
 	ErrNameOrPhoneNumber   = NewAppError(nil, "name and phone number must not be empty", "SE-00001")
 )
 
-var ErrNotFoundType = func(id int, field  string) *AppError {
+var ErrNotFoundType = func(id int, field string) *AppError {
 	return NewAppError(
 		nil,
-		fmt.Sprintf("not found, %s id: %v", field , id),
+		fmt.Sprintf("not found, %s id: %v", field, id),
 		"SE-00004",
 	)
 }
 
-var ErrAlreadyData = func(field  string) *AppError {
+var ErrAlreadyData = func(field string) *AppError {
 	return NewAppError(
 		nil,
-		fmt.Sprintf("the %s already exists", field ),
+		fmt.Sprintf("the %s already exists", field),
 		"SE-00004",
 	)
 }
 
-var ErrOverLimit = func(limit int, field  string) *AppError {
+var ErrOverLimit = func(limit int, field string) *AppError {
 	return NewAppError(
 		nil,
-		fmt.Sprintf("%s went over the limit, limit: %d", field , limit),
+		fmt.Sprintf("%s went over the limit, limit: %d", field, limit),
 		"SE-00001",
 	)
 }
 
-var ErrNotFoundTypeStr = func(field  string) *AppError {
+var ErrNotFoundTypeStr = func(field string) *AppError {
 	return NewAppError(
 		nil,
-		fmt.Sprintf("not found, %s ", field ),
+		fmt.Sprintf("not found, %s ", field),
 		"SE-00004",
 	)
 }
 
-var ErrTime = func(field  string) *AppError {
+var ErrTime = func(field string) *AppError {
 	return NewAppError(
 		nil,
-		fmt.Sprintf("incorrect %s time format", field ),
+		fmt.Sprintf("incorrect %s time format", field),
 		"SE-00001",
 	)
 }
@@ -109,19 +109,27 @@ var ErrExpiredCoupon = func(id int) *AppError {
 	)
 }
 
-var ErrWrong = func(field  string) *AppError {
+var ErrWrong = func(field string) *AppError {
 	return NewAppError(
 		nil,
-		fmt.Sprintf("wrong %s", field ),
+		fmt.Sprintf("wrong %s", field),
 		"SE-00001",
 	)
 }
 
-var ErrNeed = func(field  string) *AppError {
+var ErrNeed = func(field string) *AppError {
 	return NewAppError(
 		nil,
-		fmt.Sprintf("%s is required", field ),
+		fmt.Sprintf("%s is required", field),
 		"SE-00001",
+	)
+}
+
+var ErrSubcategoryCreationNotAllowed = func(id int) *AppError {
+	return NewAppError(
+		nil,
+		fmt.Sprintf("Subcategories cannot be created for this category, id = %d", id),
+		"SE-00002",
 	)
 }
 

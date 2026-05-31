@@ -39,12 +39,12 @@ func (r *repository) UserRoleById(ctx context.Context, userId int, businessesId 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			var content string
-				if businessesId != nil {
-					content = fmt.Sprintf("in user_businesses table, businesses_id=%d", *businessesId)
-				} else {
-					content = "in user_businesses table"
-				}
-			
+			if businessesId != nil {
+				content = fmt.Sprintf("in user_businesses table, businesses_id=%d", *businessesId)
+			} else {
+				content = "don't have permission user"
+			}
+
 			return nil, appresult.ErrNotFoundType(userId, content)
 		}
 		return nil, err

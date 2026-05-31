@@ -94,13 +94,13 @@ func (h *handler) checkOTP(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.repository.CheckOTP(context.TODO(), otp)
+	resp, userId, err := h.repository.CheckOTP(context.TODO(), otp)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
 	}
 
-	token, err := utils.GenerateTokenPair(resp.UserId)
+	token, err := utils.GenerateTokenPair(*userId)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -121,13 +121,13 @@ func (h *handler) login(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.repository.Login(context.TODO(), login)
+	resp, userId, err := h.repository.Login(context.TODO(), login)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
 	}
 
-	token, err := utils.GenerateTokenPair(resp.UserId)
+	token, err := utils.GenerateTokenPair(*userId)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -140,16 +140,18 @@ func (h *handler) login(c *gin.Context) {
 func (h *handler) createProfile(c *gin.Context) {
 	var (
 		user      UserReqDTO
-		imagePath string
+		imagePath *string
 	)
 	userId, err := utils.ExtractUserIdFromToken(c, h.client)
 	if err != nil {
+		fmt.Println("error: ", err)
 		appresult.HandleError(c, err)
 		return
 	}
 
 	jsonData := c.PostForm("data")
 	if err := json.Unmarshal([]byte(jsonData), &user); err != nil {
+		fmt.Println("error: ", err)
 		appresult.HandleError(c, err)
 		return
 	}
@@ -164,6 +166,7 @@ func (h *handler) createProfile(c *gin.Context) {
 	if err == nil {
 		imagePath, err = utils.SaveUploadedFile(c, image, uploadDir)
 		if err != nil {
+			fmt.Println("error: ", err)
 			appresult.HandleError(c, err)
 			return
 		}
@@ -206,8 +209,8 @@ func (h *handler) getProfile(c *gin.Context) {
 
 func (h *handler) update(c *gin.Context) {
 	var (
-		user      UserUpdateDTO
-		imagePath string
+		user      UserReqDTO
+		imagePath *string
 	)
 	userId, err := utils.ExtractUserIdFromToken(c, h.client)
 	if err != nil {

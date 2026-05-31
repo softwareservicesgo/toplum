@@ -32,6 +32,7 @@ func (r *repository) Create(ctx context.Context, dto subcategory.SubcategoryDTO,
 	var (
 		id            int
 		subcategoryId int
+		hasDetail     bool
 	)
 
 	q := `
@@ -47,41 +48,55 @@ func (r *repository) Create(ctx context.Context, dto subcategory.SubcategoryDTO,
 
 		if errors.Is(err, pgx.ErrNoRows) {
 			q = `
+				SELECT has_detail
+					FROM categories
+					WHERE id = $1
+			`
+			err = r.client.QueryRow(ctx, q, dto.CategoryID).Scan(&hasDetail)
+			if err != nil {
+				fmt.Println("error: ", err)
+				return nil, appresult.ErrInternalServer
+			}
+			if hasDetail {
+
+				q = `
 				INSERT INTO dictionary (tm, en, ru)
 				VALUES ($1,$2,$3)
 				RETURNING id
 			`
 
-			err = r.client.QueryRow(ctx, q, dto.Name.Tm, dto.Name.En, dto.Name.Ru).Scan(&id)
-			if err != nil {
-				fmt.Println("error: ", err)
-				return nil, appresult.ErrInternalServer
-			}
+				err = r.client.QueryRow(ctx, q, dto.Name.Tm, dto.Name.En, dto.Name.Ru).Scan(&id)
+				if err != nil {
+					fmt.Println("error: ", err)
+					return nil, appresult.ErrInternalServer
+				}
 
-			q := `
+				q := `
 				INSERT INTO subcategories (name_dictionary_id, category_id, image_path)
 				VALUES ($1, $2, $3)
 				RETURNING id
 			`
 
-			err = r.client.QueryRow(ctx, q, id, dto.CategoryID, imagePath).Scan(&subcategoryId)
-			if err != nil {
-				fmt.Println("error: ", err)
-				return nil, appresult.ErrInternalServer
-			}
+				err = r.client.QueryRow(ctx, q, id, dto.CategoryID, imagePath).Scan(&subcategoryId)
+				if err != nil {
+					fmt.Println("error: ", err)
+					return nil, appresult.ErrInternalServer
+				}
 
-			resp, err := r.GetOne(ctx, subcategoryId, baseURL)
-			if err != nil {
-				fmt.Println("error: ", err)
-				return nil, err
-			}
+				resp, err := r.GetOne(ctx, subcategoryId, baseURL)
+				if err != nil {
+					fmt.Println("error: ", err)
+					return nil, err
+				}
 
-			return resp, nil
+				return resp, nil
+			} else {
+				return nil, appresult.ErrSubcategoryCreationNotAllowed(dto.CategoryID)
+			}
 		}
 		fmt.Println("error: ", err)
 		return nil, err
 	}
-
 	return nil, appresult.ErrAlreadyData("subcategory")
 }
 
@@ -230,13 +245,16 @@ func (r *repository) Update(ctx context.Context, subcategoryId int, dto subcateg
 	}
 
 	if dto.CategoryID != 0 && dto.CategoryID != subcategoryResp.Category.Id {
-		var catExists int
-		err := r.client.QueryRow(ctx, `SELECT id FROM categories WHERE id=$1`, dto.CategoryID).Scan(&catExists)
+		var hasDetail bool
+		err := r.client.QueryRow(ctx, `SELECT has_detail FROM categories WHERE id=$1 `, dto.CategoryID).Scan(&hasDetail)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return nil, appresult.ErrNotFoundType(dto.CategoryID, "category")
 			}
 			return nil, appresult.ErrInternalServer
+		}
+		if !hasDetail {
+			return nil, appresult.ErrSubcategoryCreationNotAllowed(dto.CategoryID)
 		}
 
 		subcategoryResp.Category.Id = dto.CategoryID

@@ -32,7 +32,7 @@ func (r *repository) Create(
 
 	var (
 		dictId     int
-		categoryId int
+		itemCategoryId int
 		exists     int
 	)
 
@@ -43,7 +43,7 @@ func (r *repository) Create(
 		WHERE (d.tm = $1 OR d.en = $2 OR d.ru = $3)
 		AND ic.businesses_id = $4;
 	`
-	err := r.client.QueryRow(ctx, q, dto.Name.Tm, dto.Name.En, dto.Name.Ru, dto.BusinessID).Scan(&categoryId)
+	err := r.client.QueryRow(ctx, q, dto.Name.Tm, dto.Name.En, dto.Name.Ru, dto.BusinessID).Scan(&itemCategoryId)
 
 	if err == nil {
 		fmt.Println("error: ", err)
@@ -85,22 +85,22 @@ func (r *repository) Create(
 		VALUES ($1, $2)
 		RETURNING id;
 	`
-	err = r.client.QueryRow(ctx, q, dictId, dto.BusinessID).Scan(&categoryId)
+	err = r.client.QueryRow(ctx, q, dictId, dto.BusinessID).Scan(&itemCategoryId)
 
 	if err != nil {
 		fmt.Println("error: ", err)
 		return nil, appresult.ErrInternalServer
 	}
 
-	return r.GetOne(ctx, categoryId)
+	return r.GetOne(ctx, itemCategoryId)
 }
 
 func (r *repository) GetOne(
 	ctx context.Context,
-	categoryId int,
+	itemCategoryId int,
 ) (*itemCategory.ItemCategoryDTO, error) {
 
-	var category itemCategory.ItemCategoryDTO
+	var itemCategoryData itemCategory.ItemCategoryDTO
 
 	q := `
 		SELECT ic.id, d.tm, d.en, d.ru, ic.businesses_id
@@ -109,23 +109,23 @@ func (r *repository) GetOne(
 		WHERE ic.id = $1;
 	`
 
-	err := r.client.QueryRow(ctx, q, categoryId).Scan(
-		&category.ID,
-		&category.Name.Tm,
-		&category.Name.En,
-		&category.Name.Ru,
-		&category.BusinessID,
+	err := r.client.QueryRow(ctx, q, itemCategoryId).Scan(
+		&itemCategoryData.ID,
+		&itemCategoryData.Name.Tm,
+		&itemCategoryData.Name.En,
+		&itemCategoryData.Name.Ru,
+		&itemCategoryData.BusinessID,
 	)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			fmt.Println("error: ", err)
-			return nil, appresult.ErrNotFoundType(categoryId, "item_category")
+			return nil, appresult.ErrNotFoundType(itemCategoryId, "item_category")
 		}
 		return nil, appresult.ErrInternalServer
 	}
 
-	return &category, nil
+	return &itemCategoryData, nil
 }
 
 func (r *repository) GetAll(
@@ -192,8 +192,8 @@ func (r *repository) GetAll(
 		err := rows.Scan(
 			&c.ID,
 			&c.Name.Tm,
-			&c.Name.En,
 			&c.Name.Ru,
+			&c.Name.En,
 			&c.BusinessID,
 		)
 		if err != nil {

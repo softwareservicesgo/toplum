@@ -114,11 +114,11 @@ func (h *handler) create(c *gin.Context) {
 			appresult.HandleError(c, err)
 			return
 		}
-		additionalImages = append(additionalImages, filePath)
+		additionalImages = append(additionalImages, *filePath)
 	}
 
 	baseURL := c.MustGet("baseURL").(string)
-	businessRes, err := h.repository.AddImages(context.TODO(), *businessId, mainImagePath, additionalImages, baseURL)
+	businessRes, err := h.repository.AddImages(context.TODO(), *businessId, *mainImagePath, additionalImages, baseURL)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -213,11 +213,12 @@ func (h *handler) update(c *gin.Context) {
 		}
 		utils.DropFiles(images)
 
-		mainImagePath, err = utils.SaveUploadedFile(c, mainImage, uploadDir)
+		imagePathNew, err := utils.SaveUploadedFile(c, mainImage, uploadDir)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "cannot save main image"})
 			return
 		}
+		mainImagePath = *imagePathNew
 	} else if err != http.ErrMissingFile {
 		appresult.HandleError(c, err)
 		return
@@ -240,7 +241,7 @@ func (h *handler) update(c *gin.Context) {
 					appresult.HandleError(c, err)
 					return
 				}
-				additionalImages = append(additionalImages, filePath)
+				additionalImages = append(additionalImages, *filePath)
 			}
 		}
 	}
