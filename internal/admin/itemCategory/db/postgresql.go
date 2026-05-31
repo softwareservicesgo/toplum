@@ -31,9 +31,9 @@ func (r *repository) Create(
 ) (*itemCategory.ItemCategoryDTO, error) {
 
 	var (
-		dictId     int
+		dictId         int
 		itemCategoryId int
-		exists     int
+		exists         int
 	)
 
 	q := `
@@ -326,4 +326,30 @@ func (r *repository) Delete(ctx context.Context, itemCategory int) error {
 	}
 
 	return nil
+}
+
+func (r *repository) GetBusinessesById(
+	ctx context.Context,
+	itemCategoryId int,
+) (*int, error) {
+
+	var businessesId int
+
+	q := `
+		SELECT businesses_id
+		FROM item_categories
+		WHERE id = $1;
+	`
+
+	err := r.client.QueryRow(ctx, q, itemCategoryId).Scan(&businessesId)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			fmt.Println("error: ", err)
+			return nil, appresult.ErrNotFoundType(itemCategoryId, "item_category")
+		}
+		return nil, appresult.ErrInternalServer
+	}
+
+	return &businessesId, nil
 }

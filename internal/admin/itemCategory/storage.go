@@ -10,4 +10,5 @@ type Repository interface {
 	GetAll(ctx context.Context, businessId, search, limit, offset string) (*ItemCategoryAllDTO, error)
 	Update(ctx context.Context, itemCategoryId int, itemCategory ItemCategoryNameDTO) (*ItemCategoryDTO, error)
 	Delete(ctx context.Context, itemCategoryId int) error
+	GetBusinessesById(ctx context.Context, itemCategoryId int) (*int, error)
 }

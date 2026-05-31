@@ -225,7 +225,7 @@ func (r *repository) GetProfile(ctx context.Context, userId int, baseURL string)
 		&profile.LastName,
 		&profile.PhoneNumber,
 		&profile.ImagePath,
-		&profile.Address.Tm, &profile.Address.Ru, &profile.Address.En,
+		&profile.Address.Tm, &profile.Address.En, &profile.Address.Ru,
 	)
 
 	if err != nil {

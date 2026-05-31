@@ -46,8 +46,12 @@ func (h *handler) Register(router *gin.RouterGroup) {
 
 func (h *handler) create(c *gin.Context) {
 	var dto ItemCategoryCreateDTO
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
 
-	role, err := h.extractUserIdAndRole(c)
+	role, err := h.extractUserIdAndRole(c, dto.BusinessID)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -55,11 +59,6 @@ func (h *handler) create(c *gin.Context) {
 
 	if *role != enum.RoleAdmin && *role != enum.RoleManager {
 		appresult.HandleError(c, appresult.ErrForbidden)
-		return
-	}
-
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		appresult.HandleError(c, err)
 		return
 	}
 
@@ -108,7 +107,20 @@ func (h *handler) update(c *gin.Context) {
 		itemCategory ItemCategoryNameDTO
 	)
 
-	role, err := h.extractUserIdAndRole(c)
+	id := c.Param("id")
+	itemCategoryId, err := strconv.Atoi(id)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	businessID, err := h.repository.GetBusinessesById(context.TODO(), itemCategoryId)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	role, err := h.extractUserIdAndRole(c, *businessID)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -116,13 +128,6 @@ func (h *handler) update(c *gin.Context) {
 
 	if *role != enum.RoleAdmin && *role != enum.RoleManager {
 		appresult.HandleError(c, appresult.ErrForbidden)
-		return
-	}
-
-	id := c.Param("id")
-	itemCategoryId, err := strconv.Atoi(id)
-	if err != nil {
-		appresult.HandleError(c, err)
 		return
 	}
 
@@ -141,7 +146,20 @@ func (h *handler) update(c *gin.Context) {
 }
 
 func (h *handler) delete(c *gin.Context) {
-	role, err := h.extractUserIdAndRole(c)
+	id := c.Param("id")
+	itemCategoryId, err := strconv.Atoi(id)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	businessID, err := h.repository.GetBusinessesById(context.TODO(), itemCategoryId)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	role, err := h.extractUserIdAndRole(c, *businessID)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -149,13 +167,6 @@ func (h *handler) delete(c *gin.Context) {
 
 	if *role != enum.RoleAdmin && *role != enum.RoleManager {
 		appresult.HandleError(c, appresult.ErrForbidden)
-		return
-	}
-
-	id := c.Param("id")
-	itemCategoryId, err := strconv.Atoi(id)
-	if err != nil {
-		appresult.HandleError(c, err)
 		return
 	}
 
@@ -170,13 +181,13 @@ func (h *handler) delete(c *gin.Context) {
 	})
 }
 
-func (h *handler) extractUserIdAndRole(c *gin.Context) (*string, error) {
+func (h *handler) extractUserIdAndRole(c *gin.Context, businessesId int) (*string, error) {
 	userId, err := utils.ExtractUserIdFromToken(c, h.client)
 	if err != nil {
 		return nil, err
 	}
 	if userId != -1 {
-		role, err := h.utilsRepository.UserRoleById(context.TODO(), userId, nil)
+		role, err := h.utilsRepository.UserRoleById(context.TODO(), userId, &businessesId)
 		if err != nil {
 			return nil, err
 		}
