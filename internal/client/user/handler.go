@@ -75,8 +75,8 @@ func (h *handler) register(c *gin.Context) {
 
 	if err := h.smsSender.SendOtp(register.PhoneNumber, randomNumber); err != nil {
 		h.logger.Errorln("failed to send otp:", err, "; phone:", register.PhoneNumber)
-		c.JSON(http.StatusInternalServerError,
-			appresult.NewAppError(err, "failed to send sms", "500"))
+		// c.JSON(http.StatusInternalServerError,
+		// 	appresult.NewAppError(err, "failed to send sms", "500"))
 	}
 
 	c.JSON(http.StatusOK, map[string]interface{}{
