@@ -10,4 +10,5 @@ type Repository interface {
 	Delete(ctx context.Context, itemId int) error
 	GetForUpdate(ctx context.Context, itemId int, baseURL string) (*ItemResForUpdateDTO, error)
 	GetItemsByBusiness(ctx context.Context, businessId int, baseURL string) (*[]ItemGetAllDTO, error)
+	GetBusinessesById(ctx context.Context, itemId int) (*int, error)
 }

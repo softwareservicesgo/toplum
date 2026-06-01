@@ -14,6 +14,7 @@ type ItemFilter struct {
 type ItemReqDTO struct {
 	Name            DictionaryDTO   `json:"name" binding:"required"`
 	Ingredient      []DictionaryDTO `json:"ingredients" binding:"required"`
+	Content         DictionaryDTO   `json:"content" binding:"required"`
 	Value           float32         `json:"value" binding:"required"`
 	BusinessId      int             `json:"businesses_id" binding:"required"`
 	ItemCategoryIds []int           `json:"item_category_ids" binding:"required"`
@@ -23,6 +24,7 @@ type ItemGetOneDTO struct {
 	Id              int             `json:"id"`
 	Name            DictionaryDTO   `json:"name"`
 	Ingredient      []DictionaryDTO `json:"ingredients"`
+	Content         DictionaryDTO   `json:"content"`
 	ItemCategories  []DictionaryDTO `json:"item_categories"`
 	ImagePath       string          `json:"image_path"`
 	Value           float32         `json:"value"`
@@ -47,6 +49,7 @@ type GetAllWithCount struct {
 type ItemForUpdateDTO struct {
 	NameId          int
 	IngredientId    int
+	ContentId       int
 	Value           float32
 	BusinessId      int
 	ItemCategoryIds []int
@@ -64,6 +67,7 @@ type ItemResForUpdateDTO struct {
 	Id              int             `json:"id"`
 	Name            DictionaryDTO   `json:"name"`
 	Ingredient      []DictionaryDTO `json:"ingredients"`
+	Content         DictionaryDTO   `json:"content"`
 	ImagePath       string          `json:"image_path"`
 	Value           float32         `json:"value"`
 	ItemCategories  []Name          `json:"item_categories"`

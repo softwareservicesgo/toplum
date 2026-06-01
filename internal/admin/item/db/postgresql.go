@@ -627,6 +627,32 @@ func (r *repository) GetItemsByBusiness(ctx context.Context, businessId int, bas
 	return &result, nil
 }
 
+func (r *repository) GetBusinessesById(
+	ctx context.Context,
+	itemId int,
+) (*int, error) {
+
+	var businessesId int
+
+	q := `
+		SELECT businesses_id
+		FROM items
+		WHERE id = $1;
+	`
+
+	err := r.client.QueryRow(ctx, q, itemId).Scan(&businessesId)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			fmt.Println("error: ", err)
+			return nil, appresult.ErrNotFoundType(itemId, "item")
+		}
+		return nil, appresult.ErrInternalServer
+	}
+
+	return &businessesId, nil
+}
+
 func SplitDictionary(dict item.DictionaryDTO) []item.DictionaryDTO {
 	var result []item.DictionaryDTO
 	tmParts := strings.Split(dict.Tm, "/")
