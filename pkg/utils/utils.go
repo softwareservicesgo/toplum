@@ -6,6 +6,7 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"regexp"
 	"restaurants/internal/appresult"
 	"restaurants/internal/config"
 	"strconv"
@@ -159,4 +160,13 @@ func ParsePagination(limitStr, offsetStr string) (*int, *int, error) {
 	offsetInt = (offsetInt - 1) * limitInt
 
 	return &limitInt, &offsetInt, nil
+}
+
+func ValidatePhoneNumber(phone string) error {
+	var turkmenPhoneRegex = regexp.MustCompile(`^\+993\d{8}$`)
+	if phone == "" || !turkmenPhoneRegex.MatchString(phone){
+		return appresult.ErrPhoneNumber
+	}
+
+	return nil
 }

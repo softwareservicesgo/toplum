@@ -53,6 +53,7 @@ var (
 	ErrNameOrPhoneNumber   = NewAppError(nil, "name and phone number must not be empty", "SE-00001")
 	ErrPasswordLength      = NewAppError(nil, "password must be between 8 and 50 characters", "SE-00001")
 	ErrRequiredData        = NewAppError(nil, "Insufficient data. Required fields must be provided", "SE-00001")
+	ErrPhoneNumber         = NewAppError(nil, "Invalid format. Expected format: +993XXXXXXXX (8 digits)", "SE-00001")
 )
 
 var ErrNotFoundType = func(id int, field string) *AppError {

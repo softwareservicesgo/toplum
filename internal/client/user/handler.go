@@ -66,6 +66,12 @@ func (h *handler) register(c *gin.Context) {
 		return
 	}
 
+	err := utils.ValidatePhoneNumber(register.PhoneNumber)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
 	randomNumber, err := h.repository.Register(c, register)
 	if err != nil {
 		log.Println("[ERROR]", "failed to register user:", err)
