@@ -36,6 +36,7 @@ var (
 )
 
 func (r *repository) Create(ctx context.Context, userId int, dto businesses.BusinessesReqDTO) (*int, error) {
+	var isCategory bool
 	tx, err := r.client.Begin(ctx)
 	if err != nil {
 		fmt.Println("error :", err)
@@ -62,18 +63,20 @@ func (r *repository) Create(ctx context.Context, userId int, dto businesses.Busi
 			fmt.Println("error:", err)
 			return nil, appresult.ErrNotFoundType(categoryId, "category")
 		}
-	}
-
-	if dto.SubcategoryIds != nil && len(*dto.SubcategoryIds) > 0 {
-		for _, subcategoryId := range *dto.SubcategoryIds {
-			q := `SELECT id FROM subcategories
+		isCategory = true
+	} else {
+		if dto.SubcategoryIds != nil && len(*dto.SubcategoryIds) > 0 {
+			for _, subcategoryId := range *dto.SubcategoryIds {
+				q := `SELECT id FROM subcategories
 		WHERE id = $1;`
-			err = tx.QueryRow(ctx, q, subcategoryId).Scan(&subcategoryID)
-			if err != nil {
-				fmt.Println("error:", err)
-				return nil, appresult.ErrNotFoundType(subcategoryId, "subcategory")
+				err = tx.QueryRow(ctx, q, subcategoryId).Scan(&subcategoryID)
+				if err != nil {
+					fmt.Println("error:", err)
+					return nil, appresult.ErrNotFoundType(subcategoryId, "subcategory")
+				}
 			}
 		}
+		isCategory = false
 	}
 
 	err = tx.QueryRow(ctx, queryDictionary, dto.District.Tm, dto.District.En, dto.District.Ru).Scan(&districtId)
@@ -113,22 +116,22 @@ func (r *repository) Create(ctx context.Context, userId int, dto businesses.Busi
 		INSERT INTO businesses
 			(name, province_id, district_dictionary_id, category_id,
 			phone, description_dictionary_id, opens_time, closes_time,
-			expires, value, can_order, can_reserve)
+			expires, value, can_order, can_reserve, is_category)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING id
 	`
 	err = tx.QueryRow(ctx, query,
 		dto.Name, dto.ProvinceId, districtId,
 		dto.CategoryId, dto.Phone, descriptionId,
 		dto.OpensTime, dto.ClosesTime, dto.Expires,
-		dto.Value, canOrder, canReserve).Scan(&businessId)
+		dto.Value, canOrder, canReserve, isCategory).Scan(&businessId)
 	if err != nil {
 		fmt.Println("error insert business:", err)
 		return nil, err
 	}
 
-	if dto.SubcategoryIds != nil && len(*dto.SubcategoryIds) > 0 {
+	if dto.SubcategoryIds != nil && len(*dto.SubcategoryIds) > 0 && !isCategory {
 		query = `INSERT INTO businesses_subcategories (businesses_id, subcategory_id) VALUES ($1, $2)`
 		for _, subcategoryId := range *dto.SubcategoryIds {
 			if _, err := tx.Exec(ctx, query, businessId, subcategoryId); err != nil {
@@ -237,7 +240,8 @@ func (r *repository) GetOne(ctx context.Context, businessId int, baseURL string)
 				b.discount_percent,
 				b.status,
 				b.can_order,
-				b.can_reserve
+				b.can_reserve,
+				b.is_category
 			FROM businesses b
 			JOIN provinces p            ON b.province_id = p.id
 			JOIN dictionary p_name      ON p.name_dictionary_id = p_name.id
@@ -261,6 +265,7 @@ func (r *repository) GetOne(ctx context.Context, businessId int, baseURL string)
 		&res.Status,
 		&res.CanOrder,
 		&res.CanReserve,
+		&res.IsCategory,
 	)
 
 	if err != nil {
@@ -275,10 +280,12 @@ func (r *repository) GetOne(ctx context.Context, businessId int, baseURL string)
 	res.OpensTime = opensTime.Format(formatTime)
 	res.ClosesTime = closesTime.Format(formatTime)
 
-	res.Subcategory, err = FindSubcategories(r, ctx, businessId, baseURL)
-	if err != nil {
-		fmt.Println("error3: ", err)
-		return nil, err
+	if !res.IsCategory {
+		res.Subcategory, err = FindSubcategories(r, ctx, businessId, baseURL)
+		if err != nil {
+			fmt.Println("error3: ", err)
+			return nil, err
+		}
 	}
 
 	if len(res.Subcategory) == 0 {
@@ -672,10 +679,10 @@ func (r *repository) Update(ctx context.Context, businessId int, dto businesses.
 		res.OpensTime = dto.OpensTime
 	}
 
-	if dto.CategoryId != nil {
+	if dto.CategoryId != nil { // category_id = $8,  *res.CategoryId,
 
 		var exists bool
-		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM categories WHERE id = $1)`, dto.ProvinceId).Scan(&exists); err != nil || !exists {
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM categories WHERE id = $1)`, dto.CategoryId).Scan(&exists); err != nil || !exists {
 			return appresult.ErrNotFoundType(*dto.CategoryId, "category")
 		}
 		res.CategoryId = dto.CategoryId
@@ -697,14 +704,14 @@ func (r *repository) Update(ctx context.Context, businessId int, dto businesses.
 		UPDATE businesses
 		SET province_id = $1, phone = $2, name = $3,
 			opens_time = $4, closes_time = $5,
-			expires = $6, value = $7, category_id = $8,
-			can_order = $9, can_reserve = $10
-		WHERE id = $11
+			expires = $6, value = $7,
+			can_order = $8, can_reserve = $9
+		WHERE id = $10
 	`, res.ProvinceId, res.Phone, res.Name,
 		res.OpensTime, res.ClosesTime, res.Expires,
-		*res.Value, *res.CategoryId,
-		res.CanOrder, res.CanReserve,
-		businessId); err != nil {
+		*res.Value, res.CanOrder, res.CanReserve,
+		businessId,
+	); err != nil {
 		fmt.Println("error: ", err)
 		return appresult.ErrInternalServer
 	}

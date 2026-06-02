@@ -30,11 +30,11 @@ func NewRepository(client postgresql.Client, logger *logging.Logger) item.Reposi
 
 func (r *repository) Create(ctx context.Context, dto item.ItemReqDTO, imagePath string, baseURL string) (*item.ItemGetOneDTO, error) {
 	var (
-		businessExists                       bool
-		itemId, nameDictId, ingredientDictId int
-		ingrTm, ingrEn, ingrRu               string
+		businessExists              bool
+		itemId, nameDictId          int
+		ingrTm, ingrEn, ingrRu      string
+		contentId, ingredientDictId *int
 	)
-
 	tx, err := r.client.Begin(ctx)
 	if err != nil {
 		fmt.Println("error: ", err)
@@ -46,7 +46,6 @@ func (r *repository) Create(ctx context.Context, dto item.ItemReqDTO, imagePath 
 			fmt.Println("rollback error:", rbErr)
 		}
 	}()
-
 	q := `SELECT EXISTS(SELECT 1 FROM businesses WHERE id=$1)`
 	err = tx.QueryRow(ctx, q, dto.BusinessId).Scan(&businessExists)
 	if err != nil || !businessExists {
@@ -54,31 +53,40 @@ func (r *repository) Create(ctx context.Context, dto item.ItemReqDTO, imagePath 
 	}
 
 	q = `INSERT INTO dictionary (tm, en, ru) VALUES ($1,$2,$3) RETURNING id`
+
 	err = tx.QueryRow(ctx, q, dto.Name.Tm, dto.Name.En, dto.Name.Ru).Scan(&nameDictId)
 	if err != nil {
 		fmt.Println("error: ", err)
 		return nil, err
 	}
 
-	ingrTm, ingrRu, ingrEn = toString(dto.Ingredient)
+	if len(dto.Ingredient) > 0 {
+		ingrTm, ingrRu, ingrEn = toString(dto.Ingredient)
+		err = tx.QueryRow(ctx, q, ingrTm, ingrEn, ingrRu).Scan(&ingredientDictId)
+		if err != nil {
+			fmt.Println("error: ", err)
+			return nil, err
+		}
+	}
 
-	q = `INSERT INTO dictionary (tm, en, ru) VALUES ($1,$2,$3) RETURNING id`
-	err = tx.QueryRow(ctx, q, ingrTm, ingrEn, ingrRu).Scan(&ingredientDictId)
-	if err != nil {
-		fmt.Println("error: ", err)
-		return nil, err
+	if dto.Content.En != "" && dto.Content.Tm != "" && dto.Content.Ru != "" {
+		err = tx.QueryRow(ctx, q, dto.Content.Tm, dto.Content.En, dto.Content.Ru).Scan(&contentId)
+		if err != nil {
+			fmt.Println("error: ", err)
+			return nil, err
+		}
 	}
 
 	dto.Value = float32(math.Round(float64(dto.Value)*10) / 10)
 
 	q = `
 		INSERT INTO items (name_dictionary_id, ingredient_dictionary_id, 
-							image_path, value, businesses_id )
-		VALUES ($1,$2,$3,$4,$5)
+							image_path, value, businesses_id, content_dictionary_id )
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id
 	`
 	err = tx.QueryRow(ctx, q,
-		nameDictId, ingredientDictId, imagePath, dto.Value, dto.BusinessId,
+		nameDictId, ingredientDictId, imagePath, dto.Value, dto.BusinessId, contentId,
 	).Scan(&itemId)
 	if err != nil {
 		fmt.Println("error: ", err)
@@ -136,10 +144,10 @@ func (r *repository) Create(ctx context.Context, dto item.ItemReqDTO, imagePath 
 
 func (r *repository) GetOne(ctx context.Context, itemId int, baseURL string) (*item.ItemGetOneDTO, error) {
 	var (
-		dto                 item.ItemGetOneDTO
-		ingredient          item.DictionaryDTO
-		itemCategories      []item.DictionaryDTO
-		ingTm, ingRu, ingEn *string
+		dto                                                  item.ItemGetOneDTO
+		ingredient                                           item.DictionaryDTO
+		itemCategories                                       []item.DictionaryDTO
+		ingTm, ingRu, ingEn, contentTm, contentRu, contentEn *string
 	)
 	dto.ItemCategories = []item.DictionaryDTO{}
 	dto.Ingredient = []item.DictionaryDTO{}
@@ -149,18 +157,21 @@ func (r *repository) GetOne(ctx context.Context, itemId int, baseURL string) (*i
 			i.id,
 			dn.tm, dn.ru, dn.en,
 			di.tm, di.ru, di.en,
+			ci.tm, ci.ru, ci.en,
 			i.value,
 			i.image_path,
 			i.discount_percent
 		FROM items i
 		JOIN dictionary dn ON i.name_dictionary_id = dn.id
 		LEFT JOIN dictionary di ON i.ingredient_dictionary_id = di.id
+		LEFT JOIN dictionary ci ON i.content_dictionary_id = ci.id
 		WHERE i.id = $1
 	`
 	err := r.client.QueryRow(ctx, q, itemId).Scan(
 		&dto.Id,
 		&dto.Name.Tm, &dto.Name.Ru, &dto.Name.En,
 		&ingTm, &ingRu, &ingEn,
+		&contentTm, &contentRu, &contentEn,
 		&dto.Value,
 		&dto.ImagePath,
 		&dto.DiscountPercent,
@@ -177,6 +188,15 @@ func (r *repository) GetOne(ctx context.Context, itemId int, baseURL string) (*i
 		ingredient.Ru = *ingRu
 		ingredient.En = *ingEn
 		dto.Ingredient = SplitDictionary(ingredient)
+	}
+
+	if contentTm != nil && contentRu != nil && contentEn != nil {
+		content := item.DictionaryDTO{
+			Tm: *contentTm,
+			Ru: *contentRu,
+			En: *contentEn,
+		}
+		dto.Content = &content
 	}
 
 	if dto.Value != 0 && dto.DiscountPercent != nil && *dto.DiscountPercent != 0 {
@@ -346,7 +366,10 @@ func makeItemFilter(filter item.ItemFilter) ([]interface{}, string, string) {
 }
 
 func (r *repository) Update(ctx context.Context, itemId int, dto item.ItemReqDTO, imagePath string, baseURL string) (*item.ItemResForUpdateDTO, error) {
-	var itm item.ItemForUpdateDTO
+	var (
+		itm           item.ItemForUpdateDTO
+		contentDictId *int
+	)
 
 	tx, err := r.client.Begin(ctx)
 	if err != nil {
@@ -360,10 +383,10 @@ func (r *repository) Update(ctx context.Context, itemId int, dto item.ItemReqDTO
 
 	q := `SELECT 
 		name_dictionary_id, ingredient_dictionary_id, 
-		image_path, value, businesses_id
+		content_dictionary_id, image_path, value, businesses_id
 		FROM items WHERE id = $1`
 	err = tx.QueryRow(ctx, q, itemId).Scan(
-		&itm.NameId, &itm.IngredientId, &itm.ImagePath,
+		&itm.NameId, &itm.IngredientId, &contentDictId, &itm.ImagePath,
 		&itm.Value, &itm.BusinessId,
 	)
 	if err != nil {
@@ -426,6 +449,30 @@ func (r *repository) Update(ctx context.Context, itemId int, dto item.ItemReqDTO
 		}
 		for _, catId := range dto.ItemCategoryIds {
 			_, err = tx.Exec(ctx, `INSERT INTO items_item_categories (item_id, item_category_id) VALUES ($1, $2)`, itemId, catId)
+			if err != nil {
+				return nil, appresult.ErrInternalServer
+			}
+		}
+	}
+
+	if dto.Content.En != "" && dto.Content.Tm != "" && dto.Content.Ru != "" {
+		if contentDictId != nil {
+			_, err = tx.Exec(ctx, `UPDATE dictionary SET tm=$1, en=$2, ru=$3 WHERE id=$4`,
+				dto.Content.Tm, dto.Content.En, dto.Content.Ru, *contentDictId)
+			if err != nil {
+				return nil, appresult.ErrInternalServer
+			}
+		} else {
+			var newContentId int
+			err = tx.QueryRow(ctx,
+				`INSERT INTO dictionary (tm, en, ru) VALUES ($1,$2,$3) RETURNING id`,
+				dto.Content.Tm, dto.Content.En, dto.Content.Ru,
+			).Scan(&newContentId)
+			if err != nil {
+				return nil, appresult.ErrInternalServer
+			}
+			_, err = tx.Exec(ctx, `UPDATE items SET content_dictionary_id=$1 WHERE id=$2`,
+				newContentId, itemId)
 			if err != nil {
 				return nil, appresult.ErrInternalServer
 			}

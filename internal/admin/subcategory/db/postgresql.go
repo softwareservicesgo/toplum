@@ -244,22 +244,6 @@ func (r *repository) Update(ctx context.Context, subcategoryId int, dto subcateg
 		return nil, err
 	}
 
-	if dto.CategoryID != 0 && dto.CategoryID != subcategoryResp.Category.Id {
-		var hasDetail bool
-		err := r.client.QueryRow(ctx, `SELECT has_detail FROM categories WHERE id=$1 `, dto.CategoryID).Scan(&hasDetail)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return nil, appresult.ErrNotFoundType(dto.CategoryID, "category")
-			}
-			return nil, appresult.ErrInternalServer
-		}
-		if !hasDetail {
-			return nil, appresult.ErrSubcategoryCreationNotAllowed(dto.CategoryID)
-		}
-
-		subcategoryResp.Category.Id = dto.CategoryID
-	}
-
 	if dto.Name.Tm != "" || dto.Name.En != "" || dto.Name.Ru != "" {
 		var id int
 		q := `
@@ -292,12 +276,28 @@ func (r *repository) Update(ctx context.Context, subcategoryId int, dto subcateg
 		subcategoryResp.ImagePath = imagePath
 	}
 
+	if dto.CategoryID != 0 && dto.CategoryID != subcategoryResp.Category.Id {
+		var hasDetail bool
+		err := r.client.QueryRow(ctx, `SELECT has_detail FROM categories WHERE id=$1 `, dto.CategoryID).Scan(&hasDetail)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, appresult.ErrNotFoundType(dto.CategoryID, "category")
+			}
+			return nil, appresult.ErrInternalServer
+		}
+		if !hasDetail {
+			return nil, appresult.ErrSubcategoryCreationNotAllowed(dto.CategoryID)
+		}
+
+		subcategoryResp.Category.Id = dto.CategoryID
+	}
+
 	q := `UPDATE subcategories 
 			SET 
 		category_id = $1,
 		image_path = $2 
 		WHERE id = $3`
-	_, err = r.client.Exec(ctx, q, dto.CategoryID, subcategoryResp.ImagePath, subcategoryId)
+	_, err = r.client.Exec(ctx, q, subcategoryResp.Category.Id, subcategoryResp.ImagePath, subcategoryId)
 	if err != nil {
 		return nil, appresult.ErrInternalServer
 	}

@@ -65,6 +65,7 @@ type BusinessesResDTO struct {
 	Status          string                         `json:"status"`
 	CanOrder        bool                           `json:"can_order"`
 	CanReserve      bool                           `json:"can_reserve"`
+	IsCategory      bool                           `json:"is_category"`
 }
 
 type BusinessesAllDTO struct {
