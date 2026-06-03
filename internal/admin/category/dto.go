@@ -17,6 +17,7 @@ type CategoryReqDTO struct {
 	Name      DictionaryDTO `json:"name"`
 	HasDetail *bool         `json:"has_detail"`
 }
+
 type CategoryAllDTO struct {
 	Categories []CategoryDTO `json:"categories"`
 	Count      int           `json:"count"`

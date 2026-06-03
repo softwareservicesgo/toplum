@@ -1,10 +1,8 @@
 package businesses
 
 import (
-	"restaurants/internal/admin/category"
 	"restaurants/internal/admin/item"
 	"restaurants/internal/admin/province"
-	"restaurants/internal/admin/subcategory"
 )
 
 type BusinessesFilter struct {
@@ -46,26 +44,25 @@ type BusinessesReqDTO struct {
 }
 
 type BusinessesResDTO struct {
-	Id              int                            `json:"id"`
-	Name            string                         `json:"name"`
-	Address         DictionaryDTO                  `json:"address"`
-	Images          []string                       `json:"images"`
-	Phone           string                         `json:"phone"`
-	Province        province.ProvinceDTO           `json:"province"`
-	Description     DictionaryDTO                  `json:"description"`
-	Category        *category.CategoryDTO          `json:"category"`
-	Subcategory     []subcategory.SubcategoriesDTO `json:"subcategories"`
-	Items           []item.ItemGetAllDTO           `json:"items"`
-	OpensTime       string                         `json:"opens_time"`
-	ClosesTime      string                         `json:"closes_time"`
-	DiscountPercent *int                           `json:"discount_percent"`
-	Value           *float32                       `json:"value"`
-	DiscountValue   *float32                       `json:"discount_value"`
-	Expires         *int                           `json:"expires"`
-	Status          string                         `json:"status"`
-	CanOrder        bool                           `json:"can_order"`
-	CanReserve      bool                           `json:"can_reserve"`
-	IsCategory      bool                           `json:"is_category"`
+	Id              int                  `json:"id"`
+	Name            string               `json:"name"`
+	Address         DictionaryDTO        `json:"address"`
+	Images          []string             `json:"images"`
+	Phone           string               `json:"phone"`
+	Province        province.ProvinceDTO `json:"province"`
+	Description     DictionaryDTO        `json:"description"`
+	Classification  []Classification     `json:"classification"`
+	Items           []item.ItemGetAllDTO `json:"items"`
+	OpensTime       string               `json:"opens_time"`
+	ClosesTime      string               `json:"closes_time"`
+	DiscountPercent *int                 `json:"discount_percent"`
+	Value           *float32             `json:"value"`
+	DiscountValue   *float32             `json:"discount_value"`
+	Expires         *int                 `json:"expires"`
+	Status          string               `json:"status"`
+	CanOrder        bool                 `json:"can_order"`
+	CanReserve      bool                 `json:"can_reserve"`
+	IsCategory      bool                 `json:"is_category"`
 }
 
 type BusinessesAllDTO struct {
@@ -122,4 +119,10 @@ type AllAndSum struct {
 type UpdateStatus struct {
 	Status string `json:"status" binding:"required"`
 	Reason string `json:"reason"`
+}
+
+type Classification struct {
+	Id        int           `json:"id"`
+	Name      DictionaryDTO `json:"name"`
+	ImagePath string        `json:"image_path"`
 }

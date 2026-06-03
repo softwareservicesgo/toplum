@@ -220,6 +220,7 @@ func (r *repository) GetOne(ctx context.Context, businessId int, baseURL string)
 		categoryId            *int
 	)
 	res.Items = []item.ItemGetAllDTO{}
+	res.Classification = []businesses.Classification{}
 
 	qBusiness := `
 			SELECT 
@@ -281,24 +282,14 @@ func (r *repository) GetOne(ctx context.Context, businessId int, baseURL string)
 	res.ClosesTime = closesTime.Format(formatTime)
 
 	if !res.IsCategory {
-		res.Subcategory, err = FindSubcategories(r, ctx, businessId, baseURL)
+		subcategories, err := FindSubcategories(r, ctx, businessId, baseURL)
 		if err != nil {
-			fmt.Println("error3: ", err)
+			fmt.Println("error: ", err)
 			return nil, err
 		}
-	}
+		res.Classification = MapSubcategoriesToClassification(subcategories)
+	} else {
 
-	if len(res.Subcategory) == 0 {
-		res.Subcategory = []subcategory.SubcategoriesDTO{}
-	}
-
-	res.Images, err = getImagesByBusinessId(r, ctx, businessId, baseURL)
-	if err != nil {
-		fmt.Println("error4", err)
-		return nil, err
-	}
-
-	if categoryId != nil {
 		var resC category.CategoryDTO
 		q := `
 			SELECT
@@ -322,7 +313,13 @@ func (r *repository) GetOne(ctx context.Context, businessId int, baseURL string)
 			cleanPath := strings.ReplaceAll(resC.ImagePath, "\\", "/")
 			resC.ImagePath = fmt.Sprintf("%s/%s", baseURL, cleanPath)
 		}
-		res.Category = &resC
+		res.Classification = MapToCategoryToClassification(resC)
+	}
+
+	res.Images, err = getImagesByBusinessId(r, ctx, businessId, baseURL)
+	if err != nil {
+		fmt.Println("error4", err)
+		return nil, err
 	}
 
 	if res.Value != nil && res.DiscountPercent != nil && *res.DiscountPercent != 0 {
@@ -508,16 +505,22 @@ func makeFilter(filter businesses.BusinessesFilter) ([]interface{}, string, stri
 		filters = append(filters, fmt.Sprintf("$%d <= b.opens_time  AND b.closes_time <= $%d", idx, idx+1))
 		args = append(args, filter.OpenTime)
 		args = append(args, filter.ClosesTime)
-		idx += idx + 2
+		idx += 2
 	}
 
 	if filter.Search != "" {
-		filters = append(filters, fmt.Sprintf(`
-		(LOWER(b.name) LIKE LOWER('%%' || $%d || '%%') 
-		OR LOWER(d_province.tm || ', ' || COALESCE(d_district.tm,'')) LIKE LOWER('%%' || $%d || '%%')
-		OR LOWER(d_province.en || ', ' || COALESCE(d_district.en,'')) LIKE LOWER('%%' || $%d || '%%')
-		OR LOWER(d_province.ru || ', ' || COALESCE(d_district.ru,'')) LIKE LOWER('%%' || $%d || '%%')
-		)`, idx, idx, idx, idx))
+		filters = append(filters,
+			fmt.Sprintf(`LOWER(b.name) LIKE LOWER('%%' || $%d || '%%')`, idx),
+		)
+		args = append(args, filter.Search)
+		idx++
+	}
+
+	if filter.Search != "" {
+		filters = append(filters,
+			fmt.Sprintf(`b.name ILIKE '%%' || $%d || '%%'`, idx),
+		)
+
 		args = append(args, filter.Search)
 		idx++
 	}
@@ -1051,4 +1054,32 @@ func findBusinessesForIndex(
 	}
 
 	return result, rows.Err()
+}
+
+func MapSubcategoriesToClassification(
+	subcategories []subcategory.SubcategoriesDTO,
+) []businesses.Classification {
+
+	result := make([]businesses.Classification, 0, len(subcategories))
+
+	for _, sc := range subcategories {
+		result = append(result, businesses.Classification{
+			Id:        sc.Id,
+			Name:      businesses.DictionaryDTO{Tm: sc.Name.Tm, En: sc.Name.En, Ru: sc.Name.Ru},
+			ImagePath: sc.ImagePath,
+		})
+	}
+
+	return result
+}
+
+func MapToCategoryToClassification(category category.CategoryDTO) []businesses.Classification {
+	result := make([]businesses.Classification, 0, 1)
+	result = append(result, businesses.Classification{
+		Id:        category.Id,
+		Name:      businesses.DictionaryDTO{Tm: category.Name.Tm, En: category.Name.En, Ru: category.Name.Ru},
+		ImagePath: category.ImagePath,
+	})
+
+	return result
 }

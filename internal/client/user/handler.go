@@ -100,6 +100,12 @@ func (h *handler) checkOTP(c *gin.Context) {
 		return
 	}
 
+	err := utils.ValidatePhoneNumber(otp.PhoneNumber)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
 	resp, userId, err := h.repository.CheckOTP(context.TODO(), otp)
 	if err != nil {
 		appresult.HandleError(c, err)
