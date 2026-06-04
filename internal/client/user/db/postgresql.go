@@ -126,11 +126,11 @@ func (r *repository) Login(ctx context.Context, dto user.LoginDTO) (*user.Result
 		return nil, nil, appresult.ErrNotFoundTypeStr("phone number")
 	}
 
-	if password == nil || dto.Password == "" {
+	if dto.Password == "" {
 		return nil, nil, appresult.ErrNotFoundTypeStr("password")
 	}
 
-	if bcrypt.CompareHashAndPassword([]byte(*password), []byte(dto.Password)) != nil {
+	if password == nil || bcrypt.CompareHashAndPassword([]byte(*password), []byte(dto.Password)) != nil {
 		return nil, nil, appresult.ErrWrong("password")
 	}
 
