@@ -249,12 +249,11 @@ func (r *repository) GetProfile(ctx context.Context, userId int, baseURL string)
 
 func (r *repository) UpdateProfile(ctx context.Context, userId int, users user.UserReqDTO, imagePath *string, hashPassword string, baseURL string) (*user.Profile, error) {
 	var (
-		image             *string
-		oldDistrictDictId *int
+		image *string
 	)
 
-	q := `SELECT image_path, district_dictionary_id FROM users WHERE id = $1`
-	err := r.client.QueryRow(ctx, q, userId).Scan(&image, &oldDistrictDictId)
+	q := `SELECT image_path FROM users WHERE id = $1`
+	err := r.client.QueryRow(ctx, q, userId).Scan(&image)
 	if err != nil {
 		return nil, appresult.ErrNotFoundType(userId, "user")
 	}
@@ -270,25 +269,6 @@ func (r *repository) UpdateProfile(ctx context.Context, userId int, users user.U
 	if err != nil {
 		return nil, appresult.ErrNotFoundType(users.ProvinceId, "province")
 	}
-
-	// if users.District != nil {
-	// 	if oldDistrictDictId != nil {
-	// 		q = `UPDATE dictionary SET tm = $1, en = $2, ru = $3 WHERE id = $4`
-	// 		_, err = r.client.Exec(ctx, q, users.District.Tm, users.District.En, users.District.Ru, *oldDistrictDictId)
-	// 		if err != nil {
-	// 			fmt.Println("error update district dictionary:", err)
-	// 			return nil, appresult.ErrInternalServer
-	// 		}
-	// 		districtId = oldDistrictDictId
-	// 	} else {
-	// 		q = `INSERT INTO dictionary (tm, en, ru) VALUES ($1, $2, $3) RETURNING id`
-	// 		err = r.client.QueryRow(ctx, q, users.District.Tm, users.District.En, users.District.Ru).Scan(&districtId)
-	// 		if err != nil {
-	// 			fmt.Println("error insert district dictionary:", err)
-	// 			return nil, appresult.ErrInternalServer
-	// 		}
-	// 	}
-	// }
 
 	q = `
 		UPDATE users
