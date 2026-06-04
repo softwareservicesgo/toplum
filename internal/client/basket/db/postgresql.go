@@ -104,6 +104,7 @@ func (r *repository) GetAll(ctx context.Context, userId int, page string, size s
 		FROM businesses bs
 		JOIN items i ON i.businesses_id = bs.id
 		JOIN basket b ON b.item_id = i.id
+		JOIN image_businesses img ON img.businesses_id = bs.id AND img.is_main = true
 		WHERE b.user_id = $1
 		`
 
@@ -117,7 +118,7 @@ func (r *repository) GetAll(ctx context.Context, userId int, page string, size s
 		return nil, appresult.ErrInternalServer
 	}
 
-	qRes := fmt.Sprintf(`SELECT DISTINCT bs.id, bs.name
+	qRes := fmt.Sprintf(`SELECT DISTINCT bs.id, bs.name, img.image_path
 					     %s
 						 LIMIT $2 OFFSET $3
 						`, q)
@@ -134,11 +135,14 @@ func (r *repository) GetAll(ctx context.Context, userId int, page string, size s
 			businesses basket.Businesses
 		)
 		if err := rows.Scan(
-			&businesses.Id, &businesses.Name,
+			&businesses.Id, &businesses.Name, &businesses.Image,
 		); err != nil {
 			fmt.Println("error: ", err)
 			return nil, appresult.ErrInternalServer
 		}
+
+		cleanPath := strings.ReplaceAll(businesses.Image, "\\", "/")
+		businesses.Image = fmt.Sprintf("%s/%s", baseURL, cleanPath)
 
 		items, generalBill, err := finditemsBybusinesses(r, ctx, userId, businesses.Id, baseURL)
 		if err != nil {
@@ -251,28 +255,28 @@ func (r *repository) Delete(ctx context.Context, userId, itemId int) error {
 }
 
 func (r *repository) DeleteFull(ctx context.Context, userId, itemId int) error {
-    var basketId int
-    q := `
+	var basketId int
+	q := `
         SELECT id
         FROM basket 
         WHERE user_id = $1 AND item_id = $2;
     `
-    err := r.client.QueryRow(ctx, q, userId, itemId).Scan(&basketId)
-    if err != nil {
-        if errors.Is(err, pgx.ErrNoRows) {
-            errStr := fmt.Sprintf("basket with user_id = %d and item_id = %d", userId, itemId)
-            return appresult.ErrNotFoundTypeStr(errStr)
-        }
-        fmt.Println("error: ", err)
-        return appresult.ErrInternalServer
-    }
+	err := r.client.QueryRow(ctx, q, userId, itemId).Scan(&basketId)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			errStr := fmt.Sprintf("basket with user_id = %d and item_id = %d", userId, itemId)
+			return appresult.ErrNotFoundTypeStr(errStr)
+		}
+		fmt.Println("error: ", err)
+		return appresult.ErrInternalServer
+	}
 
-    qDelete := `DELETE FROM basket WHERE id = $1`
-    _, err = r.client.Exec(ctx, qDelete, basketId)
-    if err != nil {
-        fmt.Println("error: ", err)
-        return appresult.ErrInternalServer
-    }
+	qDelete := `DELETE FROM basket WHERE id = $1`
+	_, err = r.client.Exec(ctx, qDelete, basketId)
+	if err != nil {
+		fmt.Println("error: ", err)
+		return appresult.ErrInternalServer
+	}
 
-    return nil
+	return nil
 }
