@@ -257,7 +257,7 @@ func FetchCoupon(ctx context.Context, r *repository, clientCouponId, clientId in
 	}
 
 	if time.Now().After(c.Created.AddDate(0, 0, c.Life)) {
-		return  &order.CouponData{}, nil, nil
+		return &order.CouponData{}, nil, nil
 	}
 	return &c, bookingId, nil
 }
@@ -328,7 +328,7 @@ func FindItemsByBusinesses(
 		var item basket.Item
 		if err := rows.Scan(
 			&item.Id,
-			&item.Images,
+			&item.Image,
 			&item.Name.Tm,
 			&item.Name.En,
 			&item.Name.Ru,
@@ -339,7 +339,7 @@ func FindItemsByBusinesses(
 		}
 
 		if baseURL != "" {
-			item.Images = fmt.Sprintf("%s/%s", baseURL, strings.ReplaceAll(item.Images, "\\", "/"))
+			item.Image = fmt.Sprintf("%s/%s", baseURL, strings.ReplaceAll(item.Image, "\\", "/"))
 		}
 
 		item.Value = math.Round(item.Value*100) / 100

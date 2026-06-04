@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	basketURL  = ""
-	basketById = "/:id"
+	basketURL      = ""
+	basketById     = "/:id"
+	basketByIdFull = "/:id/full"
 )
 
 type handler struct {
@@ -37,9 +38,9 @@ func NewHandler(logger *logging.Logger, repository Repository, utilsRepository u
 
 func (h *handler) Register(router *gin.RouterGroup) {
 	router.POST(basketURL, middleware.JwtTokenCheck(h.client), h.create)
-	router.GET(basketById, middleware.JwtTokenCheck(h.client), h.getOne)
 	router.GET(basketURL, middleware.JwtTokenCheck(h.client), h.getAll)
 	router.DELETE(basketById, middleware.JwtTokenCheck(h.client), h.delete)
+	router.DELETE(basketByIdFull, middleware.JwtTokenCheck(h.client), h.deleteFull)
 }
 
 func (h *handler) create(c *gin.Context) {
@@ -47,7 +48,7 @@ func (h *handler) create(c *gin.Context) {
 		foods BasketReq
 	)
 
-	clientId, err := utils.ExtractUserIdFromToken(c, h.client)
+	userId, err := utils.ExtractUserIdFromToken(c, h.client)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -58,7 +59,7 @@ func (h *handler) create(c *gin.Context) {
 		return
 	}
 
-	err = h.repository.Create(context.TODO(), clientId, foods)
+	err = h.repository.Create(context.TODO(), userId, foods)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -67,33 +68,8 @@ func (h *handler) create(c *gin.Context) {
 	c.JSON(http.StatusCreated, "succsess!!!")
 }
 
-func (h *handler) getOne(c *gin.Context) {
-	clientId, err := utils.ExtractUserIdFromToken(c, h.client)
-	if err != nil {
-		appresult.HandleError(c, err)
-		return
-	}
-	id := c.Param("id")
-	restId, err := strconv.Atoi(id)
-	if err != nil {
-		appresult.HandleError(c, err)
-		return
-	}
-
-	clientCouponId := c.Query("clientCoupondId")
-
-	baseURL := c.MustGet("baseURL").(string)
-	resp, err := h.repository.GetOne(context.TODO(), clientId, restId, clientCouponId, baseURL)
-	if err != nil {
-		appresult.HandleError(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, resp)
-}
-
 func (h *handler) getAll(c *gin.Context) {
-	clientId, err := utils.ExtractUserIdFromToken(c, h.client)
+	userId, err := utils.ExtractUserIdFromToken(c, h.client)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -104,7 +80,7 @@ func (h *handler) getAll(c *gin.Context) {
 
 	baseURL := c.MustGet("baseURL").(string)
 
-	resp, err := h.repository.GetAll(context.TODO(), clientId, page, size, baseURL)
+	resp, err := h.repository.GetAll(context.TODO(), userId, page, size, baseURL)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -114,7 +90,7 @@ func (h *handler) getAll(c *gin.Context) {
 }
 
 func (h *handler) delete(c *gin.Context) {
-	clientId, err := utils.ExtractUserIdFromToken(c, h.client)
+	userId, err := utils.ExtractUserIdFromToken(c, h.client)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -127,11 +103,34 @@ func (h *handler) delete(c *gin.Context) {
 		return
 	}
 
-	err = h.repository.Delete(context.TODO(), clientId, foodId)
+	err = h.repository.Delete(context.TODO(), userId, foodId)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, "succsess!!!")
+}
+
+func (h *handler) deleteFull(c *gin.Context) {
+	userId, err := utils.ExtractUserIdFromToken(c, h.client)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	id := c.Param("id")
+	itemId, err := strconv.Atoi(id)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	err = h.repository.DeleteFull(context.TODO(), userId, itemId)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, "success!!!")
 }
