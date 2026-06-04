@@ -187,22 +187,9 @@ func (r *repository) GetProfile(ctx context.Context, userId int, baseURL string)
     u.name, 
     u.last_name, 
     u.phone_number, 
-    u.image_path, 
-    CASE 
-        WHEN u.district IS NOT NULL 
-        THEN (p_name.tm || ', ' || u.district)
-        ELSE p_name.tm
-    END,
-    CASE 
-        WHEN u.district IS NOT NULL 
-        THEN (p_name.en || ', ' || u.district)
-        ELSE p_name.en
-    END,
-    CASE 
-        WHEN u.district IS NOT NULL 
-        THEN (p_name.ru || ', ' || u.district)
-        ELSE p_name.ru
-    END
+    u.image_path,
+	u.district,
+	p.id, p_name.tm, p_name.en, p_name.ru
 		FROM users u
 		JOIN provinces p        ON u.province_id = p.id
 		JOIN dictionary p_name  ON p.name_dictionary_id = p_name.id
@@ -214,7 +201,8 @@ func (r *repository) GetProfile(ctx context.Context, userId int, baseURL string)
 		&profile.LastName,
 		&profile.PhoneNumber,
 		&profile.ImagePath,
-		&profile.Address.Tm, &profile.Address.En, &profile.Address.Ru,
+		&profile.District,
+		&profile.Province.Id, &profile.Province.Name.Tm, &profile.Province.Name.En, &profile.Province.Name.Ru,
 	)
 
 	if err != nil {

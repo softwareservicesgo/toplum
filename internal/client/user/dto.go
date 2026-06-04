@@ -1,5 +1,7 @@
 package clients
 
+import "restaurants/internal/admin/province"
+
 type RegisterDTO struct {
 	PhoneNumber string `json:"phone_number" binding:"required"`
 }
@@ -32,13 +34,14 @@ type UserReqDTO struct {
 }
 
 type Profile struct {
-	Id            int            `json:"id"`
-	Name          string         `json:"name"`
-	LastName      *string        `json:"last_name"`
-	PhoneNumber   string         `json:"phone_number"`
-	ImagePath     *string        `json:"image_path"`
-	Address       DictionaryDTO  `json:"address"`
-	Organizations []Organization `json:"organizations"`
+	Id            int                  `json:"id"`
+	Name          string               `json:"name"`
+	LastName      *string              `json:"last_name"`
+	PhoneNumber   string               `json:"phone_number"`
+	ImagePath     *string              `json:"image_path"`
+	Province      province.ProvinceDTO `json:"province"`
+	District      *string              `json:"district"`
+	Organizations []Organization       `json:"organizations"`
 }
 
 type Organization struct {
@@ -62,4 +65,9 @@ type DictionaryDTO struct {
 	Tm string `json:"tm"`
 	En string `json:"en"`
 	Ru string `json:"ru"`
+}
+
+type Classification struct {
+	Id   int           `json:"id"`
+	Name DictionaryDTO `json:"name"`
 }
