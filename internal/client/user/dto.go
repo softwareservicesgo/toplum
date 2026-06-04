@@ -24,11 +24,11 @@ type ResultsOTP struct {
 }
 
 type UserReqDTO struct {
-	Name       string         `json:"name"        binding:"required"`
-	LastName   *string        `json:"last_name"`
-	ProvinceId int            `json:"province_id" binding:"required,min=1"`
-	District   *DictionaryDTO `json:"district"`
-	Password   string         `json:"password" binding:"required,min=8,max=50"`
+	Name       string  `json:"name"        binding:"required"`
+	LastName   *string `json:"last_name"`
+	ProvinceId int     `json:"province_id" binding:"required,min=1"`
+	District   *string `json:"district"`
+	Password   string  `json:"password" binding:"required,min=8,max=50"`
 }
 
 type Profile struct {
