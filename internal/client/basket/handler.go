@@ -65,7 +65,15 @@ func (h *handler) create(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, "succsess!!!")
+	count, err := h.repository.GetCount(context.TODO(), userId, foods.ItemId)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"count": count,
+	})
 }
 
 func (h *handler) getAll(c *gin.Context) {
@@ -97,19 +105,27 @@ func (h *handler) delete(c *gin.Context) {
 	}
 
 	id := c.Param("id")
-	foodId, err := strconv.Atoi(id)
+	itemId, err := strconv.Atoi(id)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
 	}
 
-	err = h.repository.Delete(context.TODO(), userId, foodId)
+	err = h.repository.Delete(context.TODO(), userId, itemId)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, "succsess!!!")
+	count, err := h.repository.GetCount(context.TODO(), userId, itemId)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"count": count,
+	})
 }
 
 func (h *handler) deleteFull(c *gin.Context) {

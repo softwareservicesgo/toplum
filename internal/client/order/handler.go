@@ -84,13 +84,13 @@ func (h *handler) create(c *gin.Context) {
 		return
 	}
 
-	orderId, err := h.repository.Create(context.TODO(), clientID, req)
+	orderIds, err := h.repository.Create(context.TODO(), clientID, req)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
 	}
 
-	NotifyOrderUpdate(req.BusinessesId, clientID, *orderId, h.repository)
+	NotifyOrderUpdate(req.BusinessesIds, clientID, *orderIds, h.repository)
 
 	c.JSON(http.StatusCreated, "succsess!!!")
 }
@@ -149,7 +149,7 @@ func (h *handler) getAllForBusinesses(c *gin.Context) {
 		return
 	}
 
-	role, err := h.extractUserIdAndRole(c)
+	role, err := h.extractUserIdAndRole(c, &businessesId)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -160,7 +160,7 @@ func (h *handler) getAllForBusinesses(c *gin.Context) {
 	}
 
 	userId, err := utils.ExtractUserIdFromToken(c, h.client)
-	if err != nil && userId != -1 {
+	if err != nil {
 		appresult.HandleError(c, err)
 		return
 	}
@@ -206,7 +206,7 @@ func (h *handler) update(c *gin.Context) {
 		return
 	}
 
-	NotifyOrderUpdate(resp.BusinessesId, clientID, orderID, h.repository)
+	NotifyOrderUpdate([]int{resp.BusinessesId}, clientID, []int{orderID}, h.repository)
 
 	c.JSON(http.StatusOK, resp)
 }
@@ -231,7 +231,7 @@ func (h *handler) delete(c *gin.Context) {
 		return
 	}
 
-	NotifyOrderUpdate(businessesId, clientId, orderID, h.repository)
+	NotifyOrderUpdate([]int{businessesId}, clientId, []int{orderID}, h.repository)
 
 	c.JSON(http.StatusOK, "sucessfull!!!")
 }
@@ -261,7 +261,7 @@ func (h *handler) updateStatusByClient(c *gin.Context) {
 		return
 	}
 
-	NotifyOrderUpdate(businessesId, clientId, orderID, h.repository)
+	NotifyOrderUpdate([]int{businessesId}, clientId, []int{orderID}, h.repository)
 
 	c.JSON(http.StatusOK, "sucessfull!!!")
 }
@@ -269,7 +269,7 @@ func (h *handler) updateStatusByClient(c *gin.Context) {
 func (h *handler) updateStatusByBusinesses(c *gin.Context) {
 	var req UpdateOrderStatusReq
 
-	role, err := h.extractUserIdAndRole(c)
+	role, err := h.extractUserIdAndRole(c, nil)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -302,17 +302,17 @@ func (h *handler) updateStatusByBusinesses(c *gin.Context) {
 		return
 	}
 
-	NotifyOrderUpdate(businessesId, clientId, orderID, h.repository)
+	NotifyOrderUpdate([]int{businessesId}, clientId, []int{orderID}, h.repository)
 
 	c.JSON(http.StatusOK, "sucessfull!!!")
 }
 
-func (h *handler) extractUserIdAndRole(c *gin.Context) (*string, error) {
+func (h *handler) extractUserIdAndRole(c *gin.Context, businessesId *int) (*string, error) {
 	userId, err := utils.ExtractUserIdFromToken(c, h.client)
 	if err != nil {
 		return nil, err
 	}
-	role, err := h.utilsRepository.UserRoleById(context.TODO(), userId, nil)
+	role, err := h.utilsRepository.UserRoleById(context.TODO(), userId, businessesId)
 	if err != nil {
 		return nil, err
 	}

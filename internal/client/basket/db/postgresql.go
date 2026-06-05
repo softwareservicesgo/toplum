@@ -168,6 +168,28 @@ func (r *repository) GetAll(ctx context.Context, userId int, page string, size s
 	return &allBasket, nil
 }
 
+func (r *repository) GetCount(ctx context.Context, userId, itemId int) (int, error) {
+	var count int
+
+	err := r.client.QueryRow(
+		ctx,
+		`SELECT count
+		 FROM basket
+		 WHERE user_id = $1 AND item_id = $2`,
+		userId,
+		itemId,
+	).Scan(&count)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, appresult.ErrInternalServer
+	}
+
+	return count, nil
+}
+
 func finditemsBybusinesses(r *repository, ctx context.Context, userId int, businessesId int, baseURL string) (*[]basket.Item, *float64, error) {
 	var (
 		items       []basket.Item

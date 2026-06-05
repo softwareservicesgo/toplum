@@ -32,7 +32,7 @@ func (h *handler) checkBusinesses(c *gin.Context) {
 		appresult.HandleError(c, err)
 		return
 	}
-	
+
 	err = h.WSRepository.CheckBusinesses(context.TODO(), businessesId, userId)
 	if err != nil {
 		appresult.HandleError(c, err)
@@ -123,11 +123,11 @@ func (h *handler) checkClient(c *gin.Context) {
 
 func (h *handler) wsHandlerClient(c *gin.Context) {
 	clientId, err := utils.ExtractUserIdFromToken(c, h.client)
-	if err != nil{
+	if err != nil {
 		appresult.HandleError(c, err)
 		return
 	}
-	
+
 	baseURL := c.MustGet("baseURL").(string)
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -138,8 +138,8 @@ func (h *handler) wsHandlerClient(c *gin.Context) {
 
 	orderWSMutex.Lock()
 	clientConn[clientId] = &ClientWS{
-		Conn: conn,
-		Filter: &OrderClientFilter{},
+		Conn:    conn,
+		Filter:  &OrderClientFilter{},
 		BaseURL: baseURL,
 	}
 	orderWSMutex.Unlock()
@@ -177,7 +177,7 @@ func (h *handler) checkOrder(c *gin.Context) {
 
 	if err != nil {
 		appresult.HandleError(c, err)
-			return
+		return
 	}
 
 	err = h.WSRepository.CheckOrder(context.TODO(), orderId)
@@ -190,69 +190,69 @@ func (h *handler) checkOrder(c *gin.Context) {
 }
 
 func (h *handler) wsHandlerOrderOne(c *gin.Context) {
-    orderId, _ := strconv.Atoi(c.Param("id"))
-    baseURL := c.MustGet("baseURL").(string)
+	orderId, _ := strconv.Atoi(c.Param("id"))
+	baseURL := c.MustGet("baseURL").(string)
 
-    role := c.Query("role")
-    if role == "" {
-        role = "client"
-    }
+	role := c.Query("role")
+	if role == "" {
+		role = "client"
+	}
 
-    var key ConnKey
+	var key ConnKey
 
-    if role == "businesses" {
-        userId, err := utils.ExtractUserIdFromToken(c, h.client)
+	if role == "businesses" {
+		userId, err := utils.ExtractUserIdFromToken(c, h.client)
+		if err != nil {
+			appresult.HandleError(c, err)
+			return
+		}
+		key = ConnKey{ID: userId, Role: "businesses"}
+	} else {
+		clientId, err := utils.ExtractUserIdFromToken(c, h.client)
+		if err != nil {
+			appresult.HandleError(c, err)
+			return
+		}
+		key = ConnKey{ID: clientId, Role: "client"}
+	}
+
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		appresult.HandleError(c, err)
 		return
 	}
-        key = ConnKey{ID: userId, Role: "businesses"}
-    } else {
-        clientId, err := utils.ExtractUserIdFromToken(c, h.client)
-	if err != nil {
-		appresult.HandleError(c, err)
-		return
+	defer conn.Close()
+
+	orderWSMutex.Lock()
+	if _, exists := orderOneConn[orderId]; !exists {
+		orderOneConn[orderId] = make(map[ConnKey]OrderOneWS)
 	}
-        key = ConnKey{ID: clientId, Role: "client"}
-    }
 
-    conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-    if err != nil {
-        return
-    }
-    defer conn.Close()
+	orderOneConn[orderId][key] = OrderOneWS{
+		Conn:    conn,
+		BaseURL: baseURL,
+	}
+	orderWSMutex.Unlock()
 
-    orderWSMutex.Lock()
-    if _, exists := orderOneConn[orderId]; !exists {
-        orderOneConn[orderId] = make(map[ConnKey]OrderOneWS)
-    }
+	defer func() {
+		orderWSMutex.Lock()
+		if ow, ok := orderOneConn[orderId][key]; ok && ow.Conn == conn {
+			delete(orderOneConn[orderId], key)
+			if len(orderOneConn[orderId]) == 0 {
+				delete(orderOneConn, orderId)
+			}
+		}
+		orderWSMutex.Unlock()
+	}()
 
-    orderOneConn[orderId][key] = OrderOneWS{
-        Conn:    conn,
-        BaseURL: baseURL,
-    }
-    orderWSMutex.Unlock()
-
-    defer func() {
-        orderWSMutex.Lock()
-        if ow, ok := orderOneConn[orderId][key]; ok && ow.Conn == conn {
-            delete(orderOneConn[orderId], key)
-            if len(orderOneConn[orderId]) == 0 {
-                delete(orderOneConn, orderId)
-            }
-        }
-        orderWSMutex.Unlock()
-    }()
-
-    SendOrderOne(h.repository, orderId)
-
-    for {
-        _, _, err := conn.ReadMessage()
-        if err != nil {
-            break
-        }
 	SendOrderOne(h.repository, orderId)
-    }
+
+	for {
+		_, _, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+		SendOrderOne(h.repository, orderId)
+	}
 }
 
 func SendOrdersBusinesses(repo Repository, userId, businessesId int) {
@@ -281,7 +281,7 @@ func SendOrdersClient(repo Repository, clientId int) {
 	if !exists || cws.Conn == nil {
 		return
 	}
-	
+
 	orders, err := repo.GetAllForClient(context.TODO(), clientId, cws.Filter.Limit, cws.Filter.Offset, cws.Filter.Status, cws.Filter.Search, cws.BaseURL)
 	if err != nil {
 		return
@@ -292,39 +292,41 @@ func SendOrdersClient(repo Repository, clientId int) {
 }
 
 func SendOrderOne(repo Repository, orderId int) {
-    orderWSMutex.Lock()
-    users, exists := orderOneConn[orderId]
-    if !exists || len(users) == 0 {
-        orderWSMutex.Unlock()
-        return
-    }
-    var baseURL string
-    for _, ow := range users {
-        baseURL = ow.BaseURL
-        break
-    }
-    orderWSMutex.Unlock()
+	orderWSMutex.Lock()
+	users, exists := orderOneConn[orderId]
+	if !exists || len(users) == 0 {
+		orderWSMutex.Unlock()
+		return
+	}
+	var baseURL string
+	for _, ow := range users {
+		baseURL = ow.BaseURL
+		break
+	}
+	orderWSMutex.Unlock()
 
-    order, err := repo.GetOne(context.TODO(), orderId, baseURL)
-    if err != nil {
-        return
-    }
+	order, err := repo.GetOne(context.TODO(), orderId, baseURL)
+	if err != nil {
+		return
+	}
 
-    msg, _ := json.Marshal(order)
+	msg, _ := json.Marshal(order)
 
-    orderWSMutex.Lock()
-    for _, ow := range users {
-        if ow.Conn != nil {
-            _ = ow.Conn.WriteMessage(websocket.TextMessage, msg)
-        }
-    }
-    orderWSMutex.Unlock()
+	orderWSMutex.Lock()
+	for _, ow := range users {
+		if ow.Conn != nil {
+			_ = ow.Conn.WriteMessage(websocket.TextMessage, msg)
+		}
+	}
+	orderWSMutex.Unlock()
 }
 
-func NotifyOrderUpdate(businessesId, clientId, orderId int, repo Repository) {
-	if clients, exists := businessesConn[businessesId]; exists {
-		for userId := range clients {
-			SendOrdersBusinesses(repo, userId, businessesId)
+func NotifyOrderUpdate(businessesIds []int, clientId int, orderIds []int, repo Repository) {
+	for _, businessesId := range businessesIds {
+		if clients, exists := businessesConn[businessesId]; exists {
+			for userId := range clients {
+				SendOrdersBusinesses(repo, userId, businessesId)
+			}
 		}
 	}
 
@@ -332,7 +334,9 @@ func NotifyOrderUpdate(businessesId, clientId, orderId int, repo Repository) {
 		SendOrdersClient(repo, clientId)
 	}
 
-	  if orderId != 0 {
-        SendOrderOne(repo, orderId)
-    }
+	for _, orderId := range orderIds {
+		if orderId != 0 {
+			SendOrderOne(repo, orderId)
+		}
+	}
 }

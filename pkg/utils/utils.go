@@ -154,9 +154,6 @@ func ParsePagination(limitStr, offsetStr string) (*int, *int, error) {
 	if err != nil || limitInt < 1 {
 		limitInt = 10
 	}
-	if err != nil {
-		return nil, nil, appresult.ErrInternalServer
-	}
 	offsetInt = (offsetInt - 1) * limitInt
 
 	return &limitInt, &offsetInt, nil
@@ -164,7 +161,7 @@ func ParsePagination(limitStr, offsetStr string) (*int, *int, error) {
 
 func ValidatePhoneNumber(phone string) error {
 	var turkmenPhoneRegex = regexp.MustCompile(`^\+993\d{8}$`)
-	if phone == "" || !turkmenPhoneRegex.MatchString(phone){
+	if phone == "" || !turkmenPhoneRegex.MatchString(phone) {
 		return appresult.ErrPhoneNumber
 	}
 

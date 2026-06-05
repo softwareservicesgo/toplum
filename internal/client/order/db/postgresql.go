@@ -5,14 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"regexp"
 	"restaurants/internal/appresult"
 	"restaurants/internal/client/basket"
 	"restaurants/internal/client/order"
 	"restaurants/pkg/client/postgresql"
 	"restaurants/pkg/logging"
 	"restaurants/pkg/utils"
-	"strconv"
 	"strings"
 	"time"
 
@@ -33,7 +31,8 @@ func NewRepository(client postgresql.Client, logger *logging.Logger, basketRepos
 	}
 }
 
-func (r *repository) Create(ctx context.Context, clientId int, req order.CreateOrderReq) (*int, error) {
+func (r *repository) Create(ctx context.Context, clientId int, req order.CreateOrderReq) (*[]int, error) {
+	var orderIds []int
 
 	tx, err := r.client.Begin(ctx)
 	if err != nil {
@@ -41,120 +40,85 @@ func (r *repository) Create(ctx context.Context, clientId int, req order.CreateO
 	}
 	defer tx.Rollback(ctx)
 
-	var (
-		baskets []order.Basket
-		total   float64
-		orderId int
-	)
-	q := `
-		SELECT i.id, i.value, b.count
-		FROM basket b
-		JOIN items i ON b.item_id = i.id
-		WHERE b.client_id = $1 AND i.businesses_id = $2
-	`
-	rows, err := tx.Query(ctx, q, clientId, req.BusinessesId)
-	if err != nil {
-		fmt.Println("error: ", err)
-		return nil, appresult.ErrInternalServer
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var basket order.Basket
-		if err := rows.Scan(&basket.ItemId, &basket.Price, &basket.Count); err != nil {
-			fmt.Println("error: ", err)
-			return nil, appresult.ErrInternalServer
-		}
-		total += basket.Price * float64(basket.Count)
-		baskets = append(baskets, basket)
-	}
-
-	if len(baskets) == 0 {
-		return nil, appresult.ErrNotFoundType(req.BusinessesId, "basket by businesses")
-	}
-
-	if req.ClientCouponId != nil {
-		totalWithCoupon, err := ApplyCoupon(ctx, r, clientId, *req.ClientCouponId, total)
-		if err != nil {
-			fmt.Println("error: ", err)
-			return nil, err
-		}
-		if totalWithCoupon != nil {
-			total = *totalWithCoupon
-		}
-	}
-
-	if total != 0 {
-		total = math.Round(total*100) / 100
-	}
-
 	parsedTime, err := time.Parse("2006-01-02 15:04", req.OrderTime)
 	if err != nil {
-		fmt.Println("error:", err)
 		return nil, appresult.ErrInternalServer
 	}
 
-	q = `
-	INSERT INTO orders 
-		(client_id, businesses_id, client_coupon_id, total_price, place, order_time)
-	VALUES ($1, $2, $3, $4, $5, $6)
-	RETURNING id
-	`
-	err = tx.QueryRow(ctx, q,
-		clientId,
-		req.BusinessesId,
-		req.ClientCouponId,
-		total,
-		req.Place,
-		parsedTime,
-	).Scan(&orderId)
-	if err != nil {
-		fmt.Println("error: ", err)
-		return nil, appresult.ErrInternalServer
-	}
-
-	for _, basket := range baskets {
-		_, err = tx.Exec(ctx, `
-			INSERT INTO order_items (order_id, item_id, quantity, price)
-			VALUES ($1,$2,$3,$4)
-		`, orderId, basket.ItemId, basket.Count, basket.Price)
-		if err != nil {
-			fmt.Println("error: ", err)
-			return nil, appresult.ErrInternalServer
-		}
-	}
-	q = `
-			DELETE FROM basket
-		WHERE client_id = $1
-		AND item_id IN (
-		SELECT id FROM items WHERE businesses_id = $2
+	for _, businessesId := range req.BusinessesIds {
+		var (
+			baskets []order.Basket
+			total   float64
+			orderId int
 		)
-	`
-	_, err = tx.Exec(ctx, q, clientId, req.BusinessesId)
-	if err != nil {
-		fmt.Println("error: ", err)
-		return nil, appresult.ErrInternalServer
-	}
 
-	if req.ClientCouponId != nil {
-		_, err = tx.Exec(ctx, `
-		UPDATE client_coupons
-		SET booking_id = $1,
-		    booking_type = $2,
-		    updated_at = now()
-		WHERE id = $3
-	`, orderId, "ORDER", *req.ClientCouponId)
+		rows, err := tx.Query(ctx, `
+			SELECT i.id, i.value, b.count
+			FROM basket b
+			JOIN items i ON b.item_id = i.id
+			WHERE b.user_id = $1 AND i.businesses_id = $2
+		`, clientId, businessesId)
 		if err != nil {
-			fmt.Println("error: ", err)
+			return nil, appresult.ErrNotFoundTypeStr("items in basket")
+		}
+
+		for rows.Next() {
+			var basket order.Basket
+			if err := rows.Scan(&basket.ItemId, &basket.Price, &basket.Count); err != nil {
+				rows.Close()
+				return nil, appresult.ErrInternalServer
+			}
+			total += basket.Price * float64(basket.Count)
+			baskets = append(baskets, basket)
+		}
+		rows.Close()
+
+		if err := rows.Err(); err != nil {
 			return nil, appresult.ErrInternalServer
 		}
+
+		if len(baskets) == 0 {
+			return nil, appresult.ErrNotFoundType(businessesId, "basket by businesses")
+		}
+
+		total = math.Round(total*100) / 100
+
+		err = tx.QueryRow(ctx, `
+			INSERT INTO orders (user_id, businesses_id, total_price, place, order_time)
+			VALUES ($1, $2, $3, $4, $5)
+			RETURNING id
+		`, clientId, businessesId, total, req.Place, parsedTime).Scan(&orderId)
+		if err != nil {
+			return nil, appresult.ErrInternalServer
+		}
+
+		for _, basket := range baskets {
+			_, err = tx.Exec(ctx, `
+				INSERT INTO order_items (order_id, item_id, quantity, price)
+				VALUES ($1, $2, $3, $4)
+			`, orderId, basket.ItemId, basket.Count, basket.Price)
+			if err != nil {
+				return nil, appresult.ErrInternalServer
+			}
+		}
+
+		_, err = tx.Exec(ctx, `
+			DELETE FROM basket
+			WHERE user_id = $1
+			AND item_id IN (SELECT id FROM items WHERE businesses_id = $2)
+		`, clientId, businessesId)
+		if err != nil {
+			return nil, appresult.ErrInternalServer
+		}
+
+		orderIds = append(orderIds, orderId)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		fmt.Println("error: ", err)
 		return nil, appresult.ErrInternalServer
 	}
-	return &orderId, nil
+
+	return &orderIds, nil
 }
 
 func (r *repository) GetOne(
@@ -163,38 +127,29 @@ func (r *repository) GetOne(
 	baseURL string,
 ) (*order.OrderOne, error) {
 
-	var (
-		result         order.OrderOne
-		clientId       int
-		clientCouponId *int
-	)
+	var result order.OrderOne
 
-	q := `
-			SELECT b.id, b.name, o.client_id, o.client_coupon_id, o.status
-        FROM orders o
-        JOIN businesses b ON b.id = o.businesses_id
-        WHERE o.id = $1
-	`
-
-	result.Id = orderId
-	err := r.client.QueryRow(ctx, q, orderId).Scan(
+	err := r.client.QueryRow(ctx, `
+		SELECT b.id, b.name, o.status
+		FROM orders o
+		JOIN businesses b ON b.id = o.businesses_id
+		WHERE o.id = $1
+	`, orderId).Scan(
 		&result.BusinessesId,
 		&result.BusinessesName,
-		&clientId,
-		&clientCouponId,
 		&result.Status,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, appresult.ErrNotFoundType(orderId, "order")
 		}
-		fmt.Println("Error: ", err)
 		return nil, appresult.ErrInternalServer
 	}
 
-	items, total, countItems, err := FindItemsByBusinesses(ctx, r, orderId, result.BusinessesId, baseURL)
+	result.Id = orderId
+
+	items, total, countItems, err := FindItemsByOrder(ctx, r, orderId, baseURL)
 	if err != nil {
-		fmt.Println("Error: ", err)
 		return nil, err
 	}
 
@@ -202,108 +157,13 @@ func (r *repository) GetOne(
 	result.CountItems = countItems
 	result.GeneralBill = math.Round(total*100) / 100
 
-	if clientCouponId != nil {
-		if err = ApplyCouponWithGeneral(ctx, r, clientId, *clientCouponId, &result); err != nil {
-			fmt.Println("Error: ", err)
-			return nil, err
-		}
-	}
-
 	return &result, nil
 }
 
-func CalculateDiscount(total float64, couponText string) float64 {
-	re := regexp.MustCompile(`\d+%`)
-	match := re.FindString(couponText)
-
-	if match != "" {
-		p, _ := strconv.Atoi(strings.TrimSuffix(match, "%"))
-		total -= total * float64(p) / 100
-	} else {
-		re := regexp.MustCompile(`(\d+(\.\d+)?)`)
-		match := re.FindString(couponText)
-		if match != "" {
-			v, _ := strconv.Atoi(match)
-			total -= float64(v)
-		}
-		if total < 0 {
-			total = 0
-		}
-	}
-	return total
-}
-
-func FetchCoupon(ctx context.Context, r *repository, clientCouponId, clientId int) (*order.CouponData, *int, error) {
-	var (
-		c         order.CouponData
-		bookingId *int
-	)
-
-	err := r.client.QueryRow(ctx, `
-        SELECT cc.created_at, bc.life, d.tm, d.ru, d.en, cc.booking_id
-        FROM client_coupons cc
-        JOIN businesses_coupons bc ON bc.id = cc.businesses_coupon_id
-        JOIN dictionary d ON d.id = bc.coupon_dictionary_id
-        WHERE cc.id = $1 AND cc.client_id = $2 
-    `, clientCouponId, clientId).Scan(
-		&c.Created, &c.Life, &c.Tm, &c.Ru, &c.En,
-		&bookingId,
-	)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil, appresult.ErrNotFoundType(clientCouponId, "client coupon")
-		}
-		return nil, nil, err
-	}
-
-	if time.Now().After(c.Created.AddDate(0, 0, c.Life)) {
-		return &order.CouponData{}, nil, nil
-	}
-	return &c, bookingId, nil
-}
-
-func ApplyCoupon(ctx context.Context, r *repository, clientId, clientCouponId int, total float64) (*float64, error) {
-	coupon, bookingId, err := FetchCoupon(ctx, r, clientCouponId, clientId)
-	if err != nil {
-		return nil, err
-	}
-	if bookingId != nil {
-		return nil, appresult.ErrAlreadyCoupon(clientCouponId)
-	}
-
-	result := CalculateDiscount(total, coupon.Tm)
-	return &result, nil
-}
-
-func ApplyCouponWithGeneral(ctx context.Context, r *repository, clientId int, clientCouponId int, rest *order.OrderOne) error {
-
-	coupon, bookingId, err := FetchCoupon(ctx, r, clientCouponId, clientId)
-	if err != nil {
-		return err
-	}
-
-	if bookingId != nil {
-		rest.Coupon = &order.DictionaryDTO{}
-		rest.Coupon.Tm = coupon.Tm
-		rest.Coupon.Ru = coupon.Ru
-		rest.Coupon.En = coupon.En
-
-		total := CalculateDiscount(rest.GeneralBill, coupon.En)
-
-		if total != 0 {
-			rest.ClientCouponId = &clientCouponId
-			generalBill := math.Round(total*100) / 100
-			rest.BillWithCoupon = &generalBill
-		}
-	}
-	return nil
-}
-
-func FindItemsByBusinesses(
+func FindItemsByOrder(
 	ctx context.Context,
 	r *repository,
 	orderId int,
-	businessesId int,
 	baseURL string,
 ) ([]basket.Item, float64, int, error) {
 	var (
@@ -313,12 +173,12 @@ func FindItemsByBusinesses(
 	)
 
 	rows, err := r.client.Query(ctx, `
-        SELECT i.id, i.image_path, d.tm, d.en, d.ru, oi.price, oi.quantity
-        FROM order_items oi
-        JOIN items i ON oi.item_id = i.id
-        JOIN dictionary d ON i.name_dictionary_id = d.id
-        WHERE oi.order_id = $1 AND i.businesses_id = $2
-    `, orderId, businessesId)
+		SELECT i.id, i.image_path, d.tm, d.en, d.ru, oi.price, oi.quantity
+		FROM order_items oi
+		JOIN items i ON oi.item_id = i.id
+		JOIN dictionary d ON i.name_dictionary_id = d.id
+		WHERE oi.order_id = $1
+	`, orderId)
 	if err != nil {
 		return nil, 0, 0, appresult.ErrInternalServer
 	}
@@ -348,24 +208,36 @@ func FindItemsByBusinesses(
 		items = append(items, item)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, 0, 0, appresult.ErrInternalServer
+	}
+
 	if len(items) == 0 {
-		return nil, 0, 0, appresult.ErrNotFoundType(businessesId, "basket in businesses")
+		return nil, 0, 0, appresult.ErrNotFoundType(orderId, "items in order")
 	}
 
 	return items, total, countItems, nil
 }
 
-func (r *repository) GetAllForClient(ctx context.Context, clientId int, limitStr, offsetStr, status, search, baseURL string) (*order.OrderAllForClient, error) {
+func (r *repository) GetAllForClient(
+	ctx context.Context,
+	clientId int,
+	limitStr, offsetStr, status, search, baseURL string,
+) (*order.OrderAllForClient, error) {
 	var (
-		orders []order.OrdersForClient
+		orders []order.OrderOne
 		count  int
 		args   []interface{}
 	)
 
 	limitInt, offsetInt, err := utils.ParsePagination(limitStr, offsetStr)
+	if err != nil {
+		fmt.Println("1error: ", err)
+		return nil, err
+	}
 
 	args = append(args, clientId)
-	whereClause := " WHERE o.client_id = $1"
+	whereClause := " WHERE o.user_id = $1"
 	argCount := 1
 
 	if status != "" {
@@ -381,67 +253,73 @@ func (r *repository) GetAllForClient(ctx context.Context, clientId int, limitStr
 	}
 
 	countQuery := `
-        SELECT count(*) 
-        FROM orders o 
-        JOIN businesses b ON o.businesses_id = b.id 
-        ` + whereClause
+		SELECT count(*)
+		FROM orders o
+		JOIN businesses b ON o.businesses_id = b.id
+	` + whereClause
 
 	err = r.client.QueryRow(ctx, countQuery, args...).Scan(&count)
 	if err != nil {
-		fmt.Println("error: ", err)
-		return nil, err
+		fmt.Println("2error: ", err)
+		return nil, appresult.ErrInternalServer
+	}
+
+	if count == 0 {
+		return &order.OrderAllForClient{
+			Count:  0,
+			Orders: []order.OrderOne{},
+		}, nil
 	}
 
 	args = append(args, limitInt, offsetInt)
 	qRes := fmt.Sprintf(`
-        SELECT 
-            o.id, 
-            b.name, 
-            o.total_price,
-            d.tm, d.ru, d.en,
-            (SELECT COALESCE(SUM(quantity), 0) FROM order_items WHERE order_id = o.id) as count_items,
-			status
-        FROM orders o
-        JOIN businesses b ON o.businesses_id = b.id
-        LEFT JOIN businesses_coupons bc ON o.client_coupon_id = bc.id
-        LEFT JOIN dictionary d ON bc.coupon_dictionary_id = d.id
-        %s
-        ORDER BY o.created_at DESC
-        LIMIT $%d OFFSET $%d
-    `, whereClause, argCount+1, argCount+2)
+		SELECT
+			o.id,
+			b.id,
+			b.name,
+			o.total_price,
+			(SELECT COALESCE(SUM(quantity), 0) FROM order_items WHERE order_id = o.id) as count_items,
+			o.status
+		FROM orders o
+		JOIN businesses b ON o.businesses_id = b.id
+		%s
+		ORDER BY o.created_at DESC
+		LIMIT $%d OFFSET $%d
+	`, whereClause, argCount+1, argCount+2)
 
 	rows, err := r.client.Query(ctx, qRes, args...)
 	if err != nil {
 		fmt.Println("error: ", err)
-		return nil, err
+		return nil, appresult.ErrInternalServer
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var ord order.OrdersForClient
-		var tm, ru, en *string
-
-		err := rows.Scan(
+		var ord order.OrderOne
+		if err := rows.Scan(
 			&ord.Id,
+			&ord.BusinessesId,
 			&ord.BusinessesName,
 			&ord.GeneralBill,
-			&tm, &ru, &en,
 			&ord.CountItems,
 			&ord.Status,
-		)
+		); err != nil {
+			fmt.Println("3error: ", err)
+			return nil, appresult.ErrInternalServer
+		}
+		items, _, _, err := FindItemsByOrder(ctx, r, ord.Id, baseURL)
 		if err != nil {
-			fmt.Println("error: ", err)
 			return nil, err
 		}
 
-		if tm != nil {
-			ord.Coupon = &order.DictionaryDTO{
-				Tm: *tm,
-				Ru: *ru,
-				En: *en,
-			}
-		}
+		ord.Items = items
+
 		orders = append(orders, ord)
+	}
+
+	if err := rows.Err(); err != nil {
+		fmt.Println("4error: ", err)
+		return nil, appresult.ErrInternalServer
 	}
 
 	return &order.OrderAllForClient{
@@ -450,7 +328,11 @@ func (r *repository) GetAllForClient(ctx context.Context, clientId int, limitStr
 	}, nil
 }
 
-func (r *repository) GetAllForBusinesses(ctx context.Context, businessesId, userId int, limitStr, offsetStr, status, baseURL string) (*order.OrderAllForBusinesses, error) {
+func (r *repository) GetAllForBusinesses(
+	ctx context.Context,
+	businessesId, userId int,
+	limitStr, offsetStr, status, baseURL string,
+) (*order.OrderAllForBusinesses, error) {
 	var (
 		orders           []order.OrdersForBusinesses
 		count            int
@@ -460,9 +342,12 @@ func (r *repository) GetAllForBusinesses(ctx context.Context, businessesId, user
 	)
 
 	err := r.client.QueryRow(ctx, `
-        SELECT role, businesses_id FROM users WHERE id = $1
-    `, userId).Scan(&role, &userBusinessesId)
+		SELECT role, businesses_id FROM users WHERE id = $1
+	`, userId).Scan(&role, &userBusinessesId)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, appresult.ErrNotFoundType(userId, "user")
+		}
 		return nil, appresult.ErrInternalServer
 	}
 
@@ -473,6 +358,9 @@ func (r *repository) GetAllForBusinesses(ctx context.Context, businessesId, user
 	}
 
 	limitInt, offsetInt, err := utils.ParsePagination(limitStr, offsetStr)
+	if err != nil {
+		return nil, err
+	}
 
 	args = append(args, businessesId)
 	whereClause := " WHERE o.businesses_id = $1"
@@ -484,79 +372,73 @@ func (r *repository) GetAllForBusinesses(ctx context.Context, businessesId, user
 		args = append(args, status)
 	}
 
-	countQuery := `SELECT count(*) FROM orders o ` + whereClause
-	err = r.client.QueryRow(ctx, countQuery, args...).Scan(&count)
+	err = r.client.QueryRow(ctx,
+		`SELECT count(*) FROM orders o `+whereClause,
+		args...,
+	).Scan(&count)
 	if err != nil {
-		fmt.Println("error: ", err)
-		return nil, err
+		return nil, appresult.ErrInternalServer
+	}
+
+	if count == 0 {
+		return &order.OrderAllForBusinesses{
+			Count:  0,
+			Orders: []order.OrdersForBusinesses{},
+		}, nil
 	}
 
 	args = append(args, limitInt, offsetInt)
 	qRes := fmt.Sprintf(`
-        SELECT 
-            o.id, 
-            o.total_price, 
-            c.id, 
-			CASE 
-                WHEN c.last_name IS NOT NULL AND c.last_name != '' 
-                THEN c.name || ' ' || c.last_name 
-                ELSE c.name 
-            END,
-			COALESCE(c.image_path, ''), 
+		SELECT
+			o.id,
+			o.total_price,
+			c.id,
+			CASE
+				WHEN c.last_name IS NOT NULL AND c.last_name != ''
+				THEN c.name || ' ' || c.last_name
+				ELSE c.name
+			END,
+			COALESCE(c.image_path, ''),
 			c.phone_number,
-            d.tm, d.ru, d.en,
-            (SELECT COALESCE(SUM(quantity), 0) FROM order_items WHERE order_id = o.id) as count_items,
+			(SELECT COALESCE(SUM(quantity), 0) FROM order_items WHERE order_id = o.id) as count_items,
 			o.status
-        FROM orders o
-        JOIN clients c ON o.client_id = c.id
-        LEFT JOIN businesses_coupons bc ON o.client_coupon_id = bc.id
-        LEFT JOIN dictionary d ON bc.coupon_dictionary_id = d.id
-        %s
-        ORDER BY o.created_at DESC
-        LIMIT $%d OFFSET $%d
-    `, whereClause, argCount+1, argCount+2)
+		FROM orders o
+		JOIN clients c ON o.user_id = c.id
+		%s
+		ORDER BY o.created_at DESC
+		LIMIT $%d OFFSET $%d
+	`, whereClause, argCount+1, argCount+2)
 
 	rows, err := r.client.Query(ctx, qRes, args...)
 	if err != nil {
-		fmt.Println("error: ", err)
-		return nil, err
+		return nil, appresult.ErrInternalServer
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var ord order.OrdersForBusinesses
-		var tm, ru, en *string
-
-		err := rows.Scan(
+		if err := rows.Scan(
 			&ord.Id,
 			&ord.GeneralBill,
 			&ord.Client.Id,
 			&ord.Client.FullName,
 			&ord.Client.ImagePath,
 			&ord.Client.PhoneNumber,
-			&tm, &ru, &en,
 			&ord.CountItems,
 			&ord.Status,
-		)
-		if err != nil {
-			fmt.Println("error: ", err)
-			return nil, err
+		); err != nil {
+			return nil, appresult.ErrInternalServer
 		}
 
 		if ord.Client.ImagePath != "" && baseURL != "" {
 			ord.Client.ImagePath = fmt.Sprintf("%s/%s", baseURL, strings.ReplaceAll(ord.Client.ImagePath, "\\", "/"))
 		}
-
-		if tm != nil {
-			ord.Coupon = &order.DictionaryDTO{
-				Tm: *tm,
-				Ru: *ru,
-				En: *en,
-			}
-		}
-
 		ord.GeneralBill = math.Round(ord.GeneralBill*100) / 100
 		orders = append(orders, ord)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, appresult.ErrInternalServer
 	}
 
 	return &order.OrderAllForBusinesses{
@@ -578,7 +460,7 @@ func (r *repository) Update(
 	)
 	err := r.client.QueryRow(ctx, `
 		SELECT status FROM orders
-		WHERE id = $1 AND client_id = $2
+		WHERE id = $1 AND user_id = $2
 	`, orderID, clientID).Scan(&status)
 
 	if err != nil {
@@ -609,10 +491,9 @@ func (r *repository) Update(
 		UPDATE orders
 		SET place = $1,
 		    order_time = $2,
-		    client_coupon_id = $3,
 		    updated_at = now()
-		WHERE id = $4
-	`, dto.Place, orderTime, dto.ClientCouponId, orderID)
+		WHERE id = $3
+	`, dto.Place, orderTime, orderID)
 
 	if err != nil {
 		fmt.Println("error: ", err)
@@ -682,7 +563,7 @@ func (r *repository) Delete(
 	err = tx.QueryRow(ctx, `
 		SELECT status, businesses_id
 		FROM orders
-		WHERE id = $1 AND client_id = $2
+		WHERE id = $1 AND user_id = $2
 	`, orderID, clientID).Scan(&status, &businessesId)
 
 	if err != nil {
@@ -746,13 +627,13 @@ func (r *repository) updateOrderStatus(
 	query := ""
 	if role == "client" {
 		query = `
-				SELECT status, client_id, businesses_id
+				SELECT status, user_id, businesses_id
 			FROM orders 
-			WHERE id = $1 AND client_id = $2
+			WHERE id = $1 AND user_id = $2
 		`
 	} else {
 		query = `
-				SELECT o.status, o.client_id, o.businesses_id
+				SELECT o.status, o.user_id, o.businesses_id
 			FROM orders o
 			JOIN users u ON u.id = $2
 			WHERE o.id = $1 AND o.businesses_id = u.businesses_id
