@@ -28,19 +28,19 @@ type IndexFilter struct {
 }
 
 type BusinessesReqDTO struct {
-	Name           string        `json:"name"`
-	ProvinceId     int           `json:"province_id"`
-	District       DictionaryDTO `json:"district"`
-	Phone          string        `json:"phone"`
-	Description    DictionaryDTO `json:"description"`
-	CategoryId     *int          `json:"category_id"`
-	SubcategoryIds *[]int        `json:"subcategory_ids"`
-	OpensTime      string        `json:"opens_time"`
-	ClosesTime     string        `json:"closes_time"`
-	Value          *float32      `json:"value"`
-	Expires        *int          `json:"expires"`
-	CanOrder       *bool         `json:"can_order"`
-	CanReserve     *bool         `json:"can_reserve"`
+	Name              string        `json:"name"`
+	ProvinceId        int           `json:"province_id"`
+	District          DictionaryDTO `json:"district"`
+	Phone             string        `json:"phone"`
+	Description       DictionaryDTO `json:"description"`
+	ClassificationIds []int         `json:"classification_ids"`
+	IsCategory        bool          `json:"is_category"`
+	OpensTime         string        `json:"opens_time"`
+	ClosesTime        string        `json:"closes_time"`
+	Value             *float32      `json:"value"`
+	Expires           *int          `json:"expires"`
+	CanOrder          *bool         `json:"can_order"`
+	CanReserve        *bool         `json:"can_reserve"`
 }
 
 type BusinessesResDTO struct {

@@ -36,7 +36,6 @@ var (
 )
 
 func (r *repository) Create(ctx context.Context, userId int, dto businesses.BusinessesReqDTO) (*int, error) {
-	var isCategory bool
 	tx, err := r.client.Begin(ctx)
 	if err != nil {
 		fmt.Println("error :", err)
@@ -45,7 +44,8 @@ func (r *repository) Create(ctx context.Context, userId int, dto businesses.Busi
 	defer tx.Rollback(ctx)
 
 	var (
-		districtId, descriptionId, businessId, provinceId, subcategoryID, categoryId int
+		districtId, descriptionId, businessId, provinceId, subcategoryID int
+		categoryId                                                       *int
 	)
 	queryDictionary := `INSERT INTO dictionary (tm, en, ru) VALUES ($1, $2, $3) RETURNING id`
 
@@ -56,17 +56,17 @@ func (r *repository) Create(ctx context.Context, userId int, dto businesses.Busi
 		return nil, appresult.ErrNotFoundType(provinceId, "province")
 	}
 
-	if dto.CategoryId != nil {
+	if dto.IsCategory {
+		id := dto.ClassificationIds[0]
 		q := `SELECT id FROM categories WHERE id = $1;`
-		err = tx.QueryRow(ctx, q, dto.CategoryId).Scan(&categoryId)
+		err = tx.QueryRow(ctx, q, id).Scan(&categoryId)
 		if err != nil {
 			fmt.Println("error:", err)
-			return nil, appresult.ErrNotFoundType(categoryId, "category")
+			return nil, appresult.ErrNotFoundType(id, "category")
 		}
-		isCategory = true
 	} else {
-		if dto.SubcategoryIds != nil && len(*dto.SubcategoryIds) > 0 {
-			for _, subcategoryId := range *dto.SubcategoryIds {
+		if len(dto.ClassificationIds) > 0 {
+			for _, subcategoryId := range dto.ClassificationIds {
 				q := `SELECT id FROM subcategories
 		WHERE id = $1;`
 				err = tx.QueryRow(ctx, q, subcategoryId).Scan(&subcategoryID)
@@ -76,7 +76,6 @@ func (r *repository) Create(ctx context.Context, userId int, dto businesses.Busi
 				}
 			}
 		}
-		isCategory = false
 	}
 
 	err = tx.QueryRow(ctx, queryDictionary, dto.District.Tm, dto.District.En, dto.District.Ru).Scan(&districtId)
@@ -123,17 +122,17 @@ func (r *repository) Create(ctx context.Context, userId int, dto businesses.Busi
 	`
 	err = tx.QueryRow(ctx, query,
 		dto.Name, dto.ProvinceId, districtId,
-		dto.CategoryId, dto.Phone, descriptionId,
+		categoryId, dto.Phone, descriptionId,
 		dto.OpensTime, dto.ClosesTime, dto.Expires,
-		dto.Value, canOrder, canReserve, isCategory).Scan(&businessId)
+		dto.Value, canOrder, canReserve, dto.IsCategory).Scan(&businessId)
 	if err != nil {
 		fmt.Println("error insert business:", err)
 		return nil, err
 	}
 
-	if dto.SubcategoryIds != nil && len(*dto.SubcategoryIds) > 0 && !isCategory {
+	if len(dto.ClassificationIds) > 0 && !dto.IsCategory {
 		query = `INSERT INTO businesses_subcategories (businesses_id, subcategory_id) VALUES ($1, $2)`
-		for _, subcategoryId := range *dto.SubcategoryIds {
+		for _, subcategoryId := range dto.ClassificationIds {
 			if _, err := tx.Exec(ctx, query, businessId, subcategoryId); err != nil {
 				fmt.Println("error insert businesses_subcategories:", err)
 				return nil, err
@@ -682,14 +681,14 @@ func (r *repository) Update(ctx context.Context, businessId int, dto businesses.
 		res.OpensTime = dto.OpensTime
 	}
 
-	if dto.CategoryId != nil { // category_id = $8,  *res.CategoryId,
+	// if dto.CategoryId != nil { // category_id = $8,  *res.CategoryId,
 
-		var exists bool
-		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM categories WHERE id = $1)`, dto.CategoryId).Scan(&exists); err != nil || !exists {
-			return appresult.ErrNotFoundType(*dto.CategoryId, "category")
-		}
-		res.CategoryId = dto.CategoryId
-	}
+	// 	var exists bool
+	// 	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM categories WHERE id = $1)`, dto.CategoryId).Scan(&exists); err != nil || !exists {
+	// 		return appresult.ErrNotFoundType(*dto.CategoryId, "category")
+	// 	}
+	// 	res.CategoryId = dto.CategoryId
+	// }
 
 	if dto.Value != nil {
 		res.Value = dto.Value
@@ -719,26 +718,26 @@ func (r *repository) Update(ctx context.Context, businessId int, dto businesses.
 		return appresult.ErrInternalServer
 	}
 
-	if dto.SubcategoryIds != nil {
-		if _, err = tx.Exec(ctx, `DELETE FROM businesses_subcategories WHERE businesses_id = $1`, businessId); err != nil {
-			fmt.Println("error: ", err)
-			return appresult.ErrInternalServer
-		}
+	// if dto.SubcategoryIds != nil {
+	// 	if _, err = tx.Exec(ctx, `DELETE FROM businesses_subcategories WHERE businesses_id = $1`, businessId); err != nil {
+	// 		fmt.Println("error: ", err)
+	// 		return appresult.ErrInternalServer
+	// 	}
 
-		valueStrings := []string{}
-		valueArgs := []interface{}{}
-		argIndex := 1
-		for _, subcategoruId := range *dto.SubcategoryIds {
-			valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d)", argIndex, argIndex+1))
-			valueArgs = append(valueArgs, businessId, subcategoruId)
-			argIndex += 2
-		}
-		query := `INSERT INTO businesses_subcategories (businesses_id, subcategory_id) VALUES ` + strings.Join(valueStrings, ", ")
-		if _, err = tx.Exec(ctx, query, valueArgs...); err != nil {
-			fmt.Println("error: ", err)
-			return err
-		}
-	}
+	// 	valueStrings := []string{}
+	// 	valueArgs := []interface{}{}
+	// 	argIndex := 1
+	// 	for _, subcategoruId := range *dto.SubcategoryIds {
+	// 		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d)", argIndex, argIndex+1))
+	// 		valueArgs = append(valueArgs, businessId, subcategoruId)
+	// 		argIndex += 2
+	// 	}
+	// 	query := `INSERT INTO businesses_subcategories (businesses_id, subcategory_id) VALUES ` + strings.Join(valueStrings, ", ")
+	// 	if _, err = tx.Exec(ctx, query, valueArgs...); err != nil {
+	// 		fmt.Println("error: ", err)
+	// 		return err
+	// 	}
+	// }
 
 	if err = tx.Commit(ctx); err != nil {
 		fmt.Println("error: ", err)
