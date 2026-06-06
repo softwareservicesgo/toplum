@@ -3,6 +3,7 @@ package businesses
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -82,9 +83,19 @@ func (h *handler) create(c *gin.Context) {
 		return
 	}
 
+	if business.Name == "" || business.ProvinceId == 0 || business.Phone == "" ||
+		business.Description.Tm == "" || len(business.ClassificationIds) == 0 ||
+		business.OpensTime == "" || business.ClosesTime == "" {
+		appresult.HandleError(c, appresult.ErrRequiredData)
+		return
+	}
+
 	mainImage, err := c.FormFile("mainImage")
 	if err != nil {
-		fmt.Println("error: ", err)
+		if errors.Is(err, http.ErrMissingFile) {
+			appresult.ErrRequired("mainImage")
+			return
+		}
 		appresult.HandleError(c, err)
 		return
 	}

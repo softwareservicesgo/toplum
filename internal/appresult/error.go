@@ -33,12 +33,10 @@ var (
 	ErrInvalitJson        = func(data interface{}) *AppError {
 		return NewAppError(nil, fmt.Sprintf("invalid JSON data: %v", data), "SE-00001")
 	}
-	ErrNotMainImage        = NewAppError(nil, "mainImage required", "SE-00001")
 	ErrCreateDir           = NewAppError(nil, "cannot create upload dir", "SE-00006")
 	ErrSaveImage           = NewAppError(nil, "cannot save image", "SE-00006")
 	ErrRole                = NewAppError(nil, "wrong role", "SE-00003")
 	ErrPasswordAgainByName = NewAppError(nil, "already this password", "SE-00005")
-	ErrNotImage            = NewAppError(nil, "image required", "SE-00001")
 	ErrOverLimitt          = NewAppError(nil, "went over the limit", "SE-00001")
 	ErrOTP                 = NewAppError(nil, "your OTP password is incorrect", "SE-00002")
 	ErrTimee               = NewAppError(nil, "your time is incorrect", "SE-00001")
@@ -54,6 +52,7 @@ var (
 	ErrPasswordLength      = NewAppError(nil, "password must be between 8 and 50 characters", "SE-00001")
 	ErrRequiredData        = NewAppError(nil, "Insufficient data. Required fields must be provided", "SE-00001")
 	ErrPhoneNumber         = NewAppError(nil, "Invalid format. Expected format: +993XXXXXXXX (8 digits)", "SE-00001")
+	
 )
 
 var ErrNotFoundType = func(id int, field string) *AppError {
@@ -120,7 +119,7 @@ var ErrWrong = func(field string) *AppError {
 	)
 }
 
-var ErrNeed = func(field string) *AppError {
+var ErrRequired = func(field string) *AppError {
 	return NewAppError(
 		nil,
 		fmt.Sprintf("%s is required", field),

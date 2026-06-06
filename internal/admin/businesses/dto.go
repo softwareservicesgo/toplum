@@ -6,17 +6,17 @@ import (
 )
 
 type BusinessesFilter struct {
-	SubcategoryId int    `form:"subcategory_id"`
-	CategoryId    int    `form:"category_id"`
-	ProvinceID    int    `form:"province_id"`
-	IsDiscounted  *bool  `form:"is_discounted"`
-	OpenTime      string `form:"open_time" time_format:"15:04"`
-	ClosesTime    string `form:"closes_time" time_format:"15:04"`
-	SortByValue   string `form:"sort_by_value" binding:"omitempty,oneof=ASC DESC"`
-	Search        string `form:"search"`
-	Limit         int    `form:"limit"`
-	Offset        int    `form:"offset"`
-	Status        string `form:"status"`
+	ClassificationId int    `form:"classification_id"`
+	IsCategory       *bool  `form:"is_category"`
+	ProvinceID       int    `form:"province_id"`
+	IsDiscounted     *bool  `form:"is_discounted"`
+	OpenTime         string `form:"open_time" time_format:"15:04"`
+	ClosesTime       string `form:"closes_time" time_format:"15:04"`
+	SortByValue      string `form:"sort_by_value" binding:"omitempty,oneof=ASC DESC"`
+	Search           string `form:"search"`
+	Limit            int    `form:"limit"`
+	Offset           int    `form:"offset"`
+	Status           string `form:"status"`
 }
 
 type IndexFilter struct {
@@ -28,29 +28,30 @@ type IndexFilter struct {
 }
 
 type BusinessesReqDTO struct {
-	Name              string        `json:"name"`
-	ProvinceId        int           `json:"province_id"`
+	Name              string        `json:"name" `
+	ProvinceId        int           `json:"province_id" `
 	District          DictionaryDTO `json:"district"`
 	Phone             string        `json:"phone"`
-	Description       DictionaryDTO `json:"description"`
-	ClassificationIds []int         `json:"classification_ids"`
-	IsCategory        bool          `json:"is_category"`
-	OpensTime         string        `json:"opens_time"`
-	ClosesTime        string        `json:"closes_time"`
+	Description       DictionaryDTO `json:"description" `
+	ClassificationIds []int         `json:"classification_ids" `
+	IsCategory        *bool         `json:"is_category" `
+	OpensTime         string        `json:"opens_time" `
+	ClosesTime        string        `json:"closes_time" `
 	Value             *float32      `json:"value"`
 	Expires           *int          `json:"expires"`
 	CanOrder          *bool         `json:"can_order"`
-	CanReserve        *bool         `json:"can_reserve"`
+	CanReserve        *bool         `json:"can_reserve" `
 }
 
 type BusinessesResDTO struct {
 	Id              int                  `json:"id"`
 	Name            string               `json:"name"`
-	Address         DictionaryDTO        `json:"address"`
 	Images          []string             `json:"images"`
 	Phone           string               `json:"phone"`
 	Province        province.ProvinceDTO `json:"province"`
+	District        *DictionaryDTO       `json:"district"`
 	Description     DictionaryDTO        `json:"description"`
+	IsCategory      bool                 `json:"is_category"`
 	Classification  []Classification     `json:"classification"`
 	Items           []item.ItemGetAllDTO `json:"items"`
 	OpensTime       string               `json:"opens_time"`
@@ -62,7 +63,6 @@ type BusinessesResDTO struct {
 	Status          string               `json:"status"`
 	CanOrder        bool                 `json:"can_order"`
 	CanReserve      bool                 `json:"can_reserve"`
-	IsCategory      bool                 `json:"is_category"`
 }
 
 type BusinessesAllDTO struct {
@@ -106,9 +106,9 @@ type IndexBusinesses struct {
 }
 
 type DictionaryDTO struct {
-	Tm string `json:"tm" binding:"required"`
-	Ru string `json:"ru" binding:"required"`
-	En string `json:"en" binding:"required"`
+	Tm string `json:"tm"`
+	Ru string `json:"ru"`
+	En string `json:"en"`
 }
 
 type AllAndSum struct {

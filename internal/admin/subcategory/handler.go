@@ -80,7 +80,7 @@ func (h *handler) create(c *gin.Context) {
 
 	image, err := c.FormFile("image")
 	if err != nil {
-		appresult.HandleError(c, appresult.ErrNotImage)
+		appresult.HandleError(c, appresult.ErrRequired("image"))
 		return
 	}
 
