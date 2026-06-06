@@ -144,13 +144,14 @@ func (r *repository) GetAll(ctx context.Context, userId int, page string, size s
 		cleanPath := strings.ReplaceAll(businesses.Image, "\\", "/")
 		businesses.Image = fmt.Sprintf("%s/%s", baseURL, cleanPath)
 
-		items, generalBill, err := finditemsBybusinesses(r, ctx, userId, businesses.Id, baseURL)
+		items, generalBill, generalCount, err := finditemsBybusinesses(r, ctx, userId, businesses.Id, baseURL)
 		if err != nil {
 			fmt.Println("error: ", err)
 			return nil, appresult.ErrInternalServer
 		}
+
 		*generalBill = math.Round(*generalBill*100) / 100
-		businesses.CountItems = len(*items)
+		businesses.CountItems = *generalCount
 		businesses.GeneralBill = *generalBill
 
 		basketOne := basket.Baskets{
@@ -190,47 +191,60 @@ func (r *repository) GetCount(ctx context.Context, userId, itemId int) (int, err
 	return count, nil
 }
 
-func finditemsBybusinesses(r *repository, ctx context.Context, userId int, businessesId int, baseURL string) (*[]basket.Item, *float64, error) {
+func finditemsBybusinesses(r *repository, ctx context.Context, userId int, businessesId int, baseURL string) (*[]basket.Item, *float64, *int, error) {
 	var (
-		items       []basket.Item
-		generalBill float64
+		items                         []basket.Item
+		generalBill                   float64
+		generalCount, discountPercent int
 	)
 	qitem := `
-		    SELECT f.id, f.image_path, d.tm, d.en, d.ru, f.value, b.count
+		    SELECT i.id, i.image_path, d.tm, d.en, d.ru, i.value, b.count, i.discount_percent
 		FROM basket b
-		JOIN items f ON b.item_id = f.id
-		JOIN businesses r ON f.businesses_id = r.id
-		JOIN dictionary d ON f.name_dictionary_id = d.id
+		JOIN items i ON b.item_id = i.id
+		JOIN businesses r ON i.businesses_id = r.id
+		JOIN dictionary d ON i.name_dictionary_id = d.id
 		WHERE b.user_id = $1 AND r.id = $2
 		`
 
 	rowsF, err := r.client.Query(ctx, qitem, userId, businessesId)
 	if err != nil {
 		fmt.Println("error: ", err)
-		return nil, nil, appresult.ErrInternalServer
+		return nil, nil, nil, appresult.ErrInternalServer
 	}
 	defer rowsF.Close()
 
 	for rowsF.Next() {
 		var (
-			f basket.Item
+			item basket.Item
 		)
 		if err := rowsF.Scan(
-			&f.Id, &f.Image, &f.Name.Tm, &f.Name.En, &f.Name.Ru, &f.Value, &f.Count,
+			&item.Id, &item.Image, &item.Name.Tm, &item.Name.En, &item.Name.Ru, &item.Value, &item.Count, &discountPercent,
 		); err != nil {
 			fmt.Println("error: ", err)
-			return nil, nil, appresult.ErrInternalServer
+			return nil, nil, nil, appresult.ErrInternalServer
 		}
-		if baseURL != "" {
-			cleanPath := strings.ReplaceAll(f.Image, "\\", "/")
-			f.Image = fmt.Sprintf("%s/%s", baseURL, cleanPath)
-		}
-		f.Value = math.Round(f.Value*100) / 100
 
-		generalBill += f.Value * float64(f.Count)
-		items = append(items, f)
+		if baseURL != "" {
+			cleanPath := strings.ReplaceAll(item.Image, "\\", "/")
+			item.Image = fmt.Sprintf("%s/%s", baseURL, cleanPath)
+		}
+
+		item.Value = math.Round(item.Value*100) / 100
+
+		if item.Value != 0 && discountPercent != 0 {
+			x := math.Round((float64(item.Value)*float64(discountPercent))/10) / 10
+			discountValue := float64(item.Value) - x
+			generalBill += discountValue * float64(item.Count)
+			item.DiscountValue = &discountValue
+
+		} else {
+			generalBill += item.Value * float64(item.Count)
+		}
+
+		generalCount += item.Count
+		items = append(items, item)
 	}
-	return &items, &generalBill, nil
+	return &items, &generalBill, &generalCount, nil
 }
 
 func (r *repository) Delete(ctx context.Context, userId, itemId int) error {
@@ -276,7 +290,7 @@ func (r *repository) Delete(ctx context.Context, userId, itemId int) error {
 	return nil
 }
 
-func (r *repository) DeleteFull(ctx context.Context, userId, itemId int) error {
+func (r *repository) DeleteFullById(ctx context.Context, userId, itemId int) error {
 	var basketId int
 	q := `
         SELECT id
@@ -295,6 +309,33 @@ func (r *repository) DeleteFull(ctx context.Context, userId, itemId int) error {
 
 	qDelete := `DELETE FROM basket WHERE id = $1`
 	_, err = r.client.Exec(ctx, qDelete, basketId)
+	if err != nil {
+		fmt.Println("error: ", err)
+		return appresult.ErrInternalServer
+	}
+
+	return nil
+}
+
+func (r *repository) DeleteFull(ctx context.Context, userId int) error {
+	var basketId int
+	q := `
+        SELECT id
+        FROM basket 
+        WHERE user_id = $1;
+    `
+	err := r.client.QueryRow(ctx, q, userId).Scan(&basketId)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			errStr := fmt.Sprintf("basket with user_id = %d", userId)
+			return appresult.ErrNotFoundTypeStr(errStr)
+		}
+		fmt.Println("error: ", err)
+		return appresult.ErrInternalServer
+	}
+
+	qDelete := `DELETE FROM basket WHERE user_id = $1`
+	_, err = r.client.Exec(ctx, qDelete, userId)
 	if err != nil {
 		fmt.Println("error: ", err)
 		return appresult.ErrInternalServer

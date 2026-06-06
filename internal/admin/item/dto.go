@@ -15,7 +15,7 @@ type ItemReqDTO struct {
 	Name            DictionaryDTO   `json:"name" binding:"required"`
 	Ingredient      []DictionaryDTO `json:"ingredients"`
 	Content         DictionaryDTO   `json:"content"`
-	Value           float32         `json:"value" binding:"required"`
+	Value           float64         `json:"value" binding:"required"`
 	BusinessId      int             `json:"businesses_id" binding:"required"`
 	ItemCategoryIds []int           `json:"item_category_ids" binding:"required"`
 }
@@ -27,18 +27,18 @@ type ItemGetOneDTO struct {
 	Content         *DictionaryDTO  `json:"content"`
 	ItemCategories  []DictionaryDTO `json:"item_categories"`
 	ImagePath       string          `json:"image_path"`
-	Value           float32         `json:"value"`
+	Value           float64         `json:"value"`
 	DiscountPercent *int            `json:"discount_percent"`
-	DiscountValue   *float32        `json:"discount_value"`
+	DiscountValue   *float64        `json:"discount_value"`
 }
 
 type ItemGetAllDTO struct {
 	Id              int           `json:"id"`
 	Name            DictionaryDTO `json:"name"`
 	ImagePath       string        `json:"image_path"`
-	Value           float32       `json:"value"`
+	Value           float64       `json:"value"`
 	DiscountPercent *int          `json:"discount_percent"`
-	DiscountValue   *float32      `json:"discount_value"`
+	DiscountValue   *float64      `json:"discount_value"`
 }
 
 type GetAllWithCount struct {
@@ -50,7 +50,7 @@ type ItemForUpdateDTO struct {
 	NameId          int
 	IngredientId    int
 	ContentId       int
-	Value           float32
+	Value           float64
 	BusinessId      int
 	ItemCategoryIds []int
 	ImagePath       string
@@ -69,7 +69,7 @@ type ItemResForUpdateDTO struct {
 	Ingredient      []DictionaryDTO `json:"ingredients"`
 	Content         DictionaryDTO   `json:"content"`
 	ImagePath       string          `json:"image_path"`
-	Value           float32         `json:"value"`
+	Value           float64         `json:"value"`
 	ItemCategories  []Name          `json:"item_categories"`
 	DiscountPercent int             `json:"discount_percent"`
 }

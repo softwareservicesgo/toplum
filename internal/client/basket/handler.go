@@ -17,7 +17,8 @@ import (
 const (
 	basketURL      = ""
 	basketById     = "/:id"
-	basketByIdFull = "/:id/full"
+	basketByIdFull = "/full/:id"
+	basketFull     = "/full"
 )
 
 type handler struct {
@@ -40,7 +41,8 @@ func (h *handler) Register(router *gin.RouterGroup) {
 	router.POST(basketURL, middleware.JwtTokenCheck(h.client), h.create)
 	router.GET(basketURL, middleware.JwtTokenCheck(h.client), h.getAll)
 	router.DELETE(basketById, middleware.JwtTokenCheck(h.client), h.delete)
-	router.DELETE(basketByIdFull, middleware.JwtTokenCheck(h.client), h.deleteFull)
+	router.DELETE(basketByIdFull, middleware.JwtTokenCheck(h.client), h.deleteFullById)
+	router.DELETE(basketFull, middleware.JwtTokenCheck(h.client), h.deleteFull)
 }
 
 func (h *handler) create(c *gin.Context) {
@@ -128,7 +130,7 @@ func (h *handler) delete(c *gin.Context) {
 	})
 }
 
-func (h *handler) deleteFull(c *gin.Context) {
+func (h *handler) deleteFullById(c *gin.Context) {
 	userId, err := utils.ExtractUserIdFromToken(c, h.client)
 	if err != nil {
 		appresult.HandleError(c, err)
@@ -142,7 +144,23 @@ func (h *handler) deleteFull(c *gin.Context) {
 		return
 	}
 
-	err = h.repository.DeleteFull(context.TODO(), userId, itemId)
+	err = h.repository.DeleteFullById(context.TODO(), userId, itemId)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, "success!!!")
+}
+
+func (h *handler) deleteFull(c *gin.Context) {
+	userId, err := utils.ExtractUserIdFromToken(c, h.client)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	err = h.repository.DeleteFull(context.TODO(), userId)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return

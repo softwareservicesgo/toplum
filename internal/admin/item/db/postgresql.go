@@ -77,7 +77,7 @@ func (r *repository) Create(ctx context.Context, dto item.ItemReqDTO, imagePath 
 		}
 	}
 
-	dto.Value = float32(math.Round(float64(dto.Value)*10) / 10)
+	dto.Value = math.Round(float64(dto.Value)*10) / 10
 
 	q = `
 		INSERT INTO items (name_dictionary_id, ingredient_dictionary_id, 
@@ -201,7 +201,7 @@ func (r *repository) GetOne(ctx context.Context, itemId int, baseURL string) (*i
 
 	if dto.Value != 0 && dto.DiscountPercent != nil && *dto.DiscountPercent != 0 {
 		x := math.Round((float64(dto.Value)*float64(*dto.DiscountPercent))/10) / 10
-		discountValue := float32(float64(dto.Value) - x)
+		discountValue := float64(dto.Value) - x
 
 		dto.DiscountValue = &discountValue
 	} else if *dto.DiscountPercent == 0 {
@@ -283,7 +283,7 @@ func (r *repository) GetAll(ctx context.Context, filter item.ItemFilter, baseURL
 
 		if it.Value != 0 && it.DiscountPercent != nil && *it.DiscountPercent != 0 {
 			x := math.Round((float64(it.Value)*float64(*it.DiscountPercent))/10) / 10
-			discountValue := float32(float64(it.Value) - x)
+			discountValue := float64(it.Value) - x
 
 			it.DiscountValue = &discountValue
 		} else if *it.DiscountPercent == 0 {

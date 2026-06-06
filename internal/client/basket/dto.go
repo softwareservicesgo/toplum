@@ -29,9 +29,10 @@ type Businesses struct {
 }
 
 type Item struct {
-	Id    int           `json:"id"`
-	Image string        `json:"image"`
-	Name  DictionaryDTO `json:"name"`
-	Value float64       `json:"value"`
-	Count int           `json:"count"`
+	Id            int           `json:"id"`
+	Image         string        `json:"image"`
+	Name          DictionaryDTO `json:"name"`
+	Value         float64       `json:"value"`
+	DiscountValue *float64      `json:"discount_value"`
+	Count         int           `json:"count"`
 }
