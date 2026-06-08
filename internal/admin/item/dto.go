@@ -18,6 +18,7 @@ type ItemReqDTO struct {
 	Value           float64         `json:"value" binding:"required"`
 	BusinessId      int             `json:"businesses_id" binding:"required"`
 	ItemCategoryIds []int           `json:"item_category_ids" binding:"required"`
+	Stock           *int            `json:"stock"`
 }
 
 type ItemGetOneDTO struct {
@@ -30,6 +31,7 @@ type ItemGetOneDTO struct {
 	Value           float64         `json:"value"`
 	DiscountPercent *int            `json:"discount_percent"`
 	DiscountValue   *float64        `json:"discount_value"`
+	Stock           *int            `json:"stock"`
 }
 
 type ItemGetAllDTO struct {
@@ -55,12 +57,13 @@ type ItemForUpdateDTO struct {
 	ItemCategoryIds []int
 	ImagePath       string
 	DiscountPercent int
+	Stock           *int
 }
 
 type DictionaryDTO struct {
-	Tm string `json:"tm" binding:"required"`
-	Ru string `json:"ru" binding:"required"`
-	En string `json:"en" binding:"required"`
+	Tm string `json:"tm"`
+	Ru string `json:"ru"`
+	En string `json:"en"`
 }
 
 type ItemResForUpdateDTO struct {
@@ -72,6 +75,7 @@ type ItemResForUpdateDTO struct {
 	Value           float64         `json:"value"`
 	ItemCategories  []Name          `json:"item_categories"`
 	DiscountPercent int             `json:"discount_percent"`
+	Stock           *int            `json:"stock"`
 }
 
 type Name struct {

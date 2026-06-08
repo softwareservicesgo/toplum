@@ -45,10 +45,11 @@ type Profile struct {
 }
 
 type Organization struct {
-	Id             int    `json:"id"`
-	BusinessesId   int    `json:"businesses_id"`
-	BusinessesName string `json:"businesses_name"`
-	Role           string `json:"role"`
+	Id              int    `json:"id"`
+	BusinessesId    int    `json:"businesses_id"`
+	BusinessesName  string `json:"businesses_name"`
+	BusinessesImage string `json:"businesses_image"`
+	Role            string `json:"role"`
 }
 
 type CountAndUsers struct {

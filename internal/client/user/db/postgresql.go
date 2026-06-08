@@ -217,9 +217,10 @@ func (r *repository) GetProfile(ctx context.Context, userId int, baseURL string)
 	}
 
 	q = `
-		SELECT ub.id, ub.businesses_id, b.name, ub.role
+		SELECT ub.id, ub.businesses_id, b.name, ub.role, img.image_path
 		FROM user_businesses ub
 		JOIN businesses b ON ub.businesses_id = b.id
+		JOIN image_businesses img ON img.businesses_id = b.id AND img.is_main = true
 		WHERE ub.user_id = $1
 		ORDER BY ub.created_at DESC
 	`
@@ -237,9 +238,14 @@ func (r *repository) GetProfile(ctx context.Context, userId int, baseURL string)
 			&organization.BusinessesId,
 			&organization.BusinessesName,
 			&organization.Role,
+			&organization.BusinessesImage,
 		)
 		if err != nil {
 			return nil, err
+		}
+		if organization.BusinessesImage != "" && baseURL != "" {
+			cleanPath := strings.ReplaceAll(organization.BusinessesImage, "\\", "/")
+			organization.BusinessesImage = fmt.Sprintf("%s/%s", baseURL, cleanPath)
 		}
 
 		profile.Organizations = append(profile.Organizations, organization)

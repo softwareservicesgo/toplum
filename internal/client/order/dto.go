@@ -17,13 +17,14 @@ type Basket struct {
 }
 
 type OrderOne struct {
-	Id             int           `json:"id"`
-	BusinessesId   int           `json:"businesses_id"`
-	BusinessesName string        `json:"businesses_name"`
-	GeneralBill    float64       `json:"general_bill"`
-	Status         string        `json:"status"`
-	CountItems     int           `json:"count_items"`
-	Items          []basket.Item `json:"items"`
+	Id              int           `json:"id"`
+	BusinessesId    int           `json:"businesses_id"`
+	BusinessesName  string        `json:"businesses_name"`
+	BusinessesImage string        `json:"businesses_image"`
+	GeneralBill     float64       `json:"general_bill"`
+	Status          string        `json:"status"`
+	CountItems      int           `json:"count_items"`
+	Items           []basket.Item `json:"items"`
 }
 
 type OrderAllForClient struct {
@@ -37,11 +38,11 @@ type OrderAllForBusinesses struct {
 }
 
 type OrdersForBusinesses struct {
-	Id          int            `json:"id"`
-	Client      Client         `json:"client"`
-	GeneralBill float64        `json:"general_bill"`
-	CountItems  int            `json:"count_items"`
-	Status      string         `json:"status"`
+	Id          int     `json:"id"`
+	Client      Client  `json:"client"`
+	GeneralBill float64 `json:"general_bill"`
+	CountItems  int     `json:"count_items"`
+	Status      string  `json:"status"`
 }
 
 type Client struct {

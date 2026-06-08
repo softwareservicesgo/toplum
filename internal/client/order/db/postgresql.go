@@ -130,13 +130,15 @@ func (r *repository) GetOne(
 	var result order.OrderOne
 
 	err := r.client.QueryRow(ctx, `
-		SELECT b.id, b.name, o.status
+		SELECT b.id, b.name, img.image_path, o.status
 		FROM orders o
 		JOIN businesses b ON b.id = o.businesses_id
+		JOIN image_businesses img ON img.businesses_id = b.id AND img.is_main = true
 		WHERE o.id = $1
 	`, orderId).Scan(
 		&result.BusinessesId,
 		&result.BusinessesName,
+		&result.BusinessesImage,
 		&result.Status,
 	)
 	if err != nil {
@@ -144,6 +146,11 @@ func (r *repository) GetOne(
 			return nil, appresult.ErrNotFoundType(orderId, "order")
 		}
 		return nil, appresult.ErrInternalServer
+	}
+
+	if result.BusinessesImage != "" && baseURL != "" {
+		cleanPath := strings.ReplaceAll(result.BusinessesImage, "\\", "/")
+		result.BusinessesImage = fmt.Sprintf("%s/%s", baseURL, cleanPath)
 	}
 
 	result.Id = orderId
@@ -277,11 +284,13 @@ func (r *repository) GetAllForClient(
 			o.id,
 			b.id,
 			b.name,
+            img.image_path,
 			o.total_price,
 			(SELECT COALESCE(SUM(quantity), 0) FROM order_items WHERE order_id = o.id) as count_items,
 			o.status
 		FROM orders o
 		JOIN businesses b ON o.businesses_id = b.id
+		JOIN image_businesses img ON img.businesses_id = b.id AND img.is_main = true
 		%s
 		ORDER BY o.created_at DESC
 		LIMIT $%d OFFSET $%d
@@ -300,6 +309,7 @@ func (r *repository) GetAllForClient(
 			&ord.Id,
 			&ord.BusinessesId,
 			&ord.BusinessesName,
+			&ord.BusinessesImage,
 			&ord.GeneralBill,
 			&ord.CountItems,
 			&ord.Status,
@@ -307,6 +317,12 @@ func (r *repository) GetAllForClient(
 			fmt.Println("3error: ", err)
 			return nil, appresult.ErrInternalServer
 		}
+
+		if ord.BusinessesImage != "" && baseURL != "" {
+			cleanPath := strings.ReplaceAll(ord.BusinessesImage, "\\", "/")
+			ord.BusinessesImage = fmt.Sprintf("%s/%s", baseURL, cleanPath)
+		}
+
 		items, _, _, err := FindItemsByOrder(ctx, r, ord.Id, baseURL)
 		if err != nil {
 			return nil, err

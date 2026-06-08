@@ -69,7 +69,7 @@ func (r *repository) Create(ctx context.Context, dto item.ItemReqDTO, imagePath 
 		}
 	}
 
-	if dto.Content.En != "" && dto.Content.Tm != "" && dto.Content.Ru != "" {
+	if dto.Content.Tm != "" {
 		err = tx.QueryRow(ctx, q, dto.Content.Tm, dto.Content.En, dto.Content.Ru).Scan(&contentId)
 		if err != nil {
 			fmt.Println("error: ", err)
@@ -80,13 +80,13 @@ func (r *repository) Create(ctx context.Context, dto item.ItemReqDTO, imagePath 
 	dto.Value = math.Round(float64(dto.Value)*10) / 10
 
 	q = `
-		INSERT INTO items (name_dictionary_id, ingredient_dictionary_id, 
-							image_path, value, businesses_id, content_dictionary_id )
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO items (name_dictionary_id, ingredient_dictionary_id, image_path, 
+							value, businesses_id, content_dictionary_id, stock )
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id
 	`
 	err = tx.QueryRow(ctx, q,
-		nameDictId, ingredientDictId, imagePath, dto.Value, dto.BusinessId, contentId,
+		nameDictId, ingredientDictId, imagePath, dto.Value, dto.BusinessId, contentId, dto.Stock,
 	).Scan(&itemId)
 	if err != nil {
 		fmt.Println("error: ", err)
@@ -160,7 +160,8 @@ func (r *repository) GetOne(ctx context.Context, itemId int, baseURL string) (*i
 			ci.tm, ci.ru, ci.en,
 			i.value,
 			i.image_path,
-			i.discount_percent
+			i.discount_percent,
+			i.stock
 		FROM items i
 		JOIN dictionary dn ON i.name_dictionary_id = dn.id
 		LEFT JOIN dictionary di ON i.ingredient_dictionary_id = di.id
@@ -175,6 +176,7 @@ func (r *repository) GetOne(ctx context.Context, itemId int, baseURL string) (*i
 		&dto.Value,
 		&dto.ImagePath,
 		&dto.DiscountPercent,
+		&dto.Stock,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -183,14 +185,14 @@ func (r *repository) GetOne(ctx context.Context, itemId int, baseURL string) (*i
 		return nil, err
 	}
 
-	if ingTm != nil && ingRu != nil && ingEn != nil {
+	if ingTm != nil {
 		ingredient.Tm = *ingTm
 		ingredient.Ru = *ingRu
 		ingredient.En = *ingEn
 		dto.Ingredient = SplitDictionary(ingredient)
 	}
 
-	if contentTm != nil && contentRu != nil && contentEn != nil {
+	if contentTm != nil {
 		content := item.DictionaryDTO{
 			Tm: *contentTm,
 			Ru: *contentRu,
