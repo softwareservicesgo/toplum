@@ -46,10 +46,8 @@ func (h *handler) Register(router *gin.RouterGroup) {
 	router.POST(itemURL, middleware.JwtTokenCheck(h.client), h.create)
 	router.GET(itemById, middleware.JwtTokenCheck(h.client), h.getOne)
 	router.GET(itemURL, middleware.JwtTokenCheck(h.client), h.getAll)
-	router.PATCH(itemById, middleware.JwtTokenCheck(h.client), h.partialUpdate)
-	router.PUT(itemById, middleware.JwtTokenCheck(h.client), h.update)
+	router.PATCH(itemById, middleware.JwtTokenCheck(h.client), h.update)
 	router.DELETE(itemById, middleware.JwtTokenCheck(h.client), h.delete)
-	router.GET(itemForUpdateById, middleware.JwtTokenCheck(h.client), h.getForUpdate)
 }
 
 func (h *handler) create(c *gin.Context) {
@@ -137,10 +135,10 @@ func (h *handler) getAll(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-func (h *handler) partialUpdate(c *gin.Context) {
+func (h *handler) update(c *gin.Context) {
 	var (
 		imagePath string
-		item      ItemReqDTO
+		item      ItemUpdateDTO
 	)
 
 	id := c.Param("id")
@@ -167,69 +165,12 @@ func (h *handler) partialUpdate(c *gin.Context) {
 		return
 	}
 
-	jsonData := c.PostForm("data")
-	if jsonData != "" {
-		if err := json.Unmarshal([]byte(jsonData), &item); err != nil {
-			appresult.HandleError(c, err)
-			return
-		}
-	}
-
-	uploadDir := filepath.Join("uploads/item")
-	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
-		appresult.HandleError(c, err)
-		return
-	}
-
-	image, err := c.FormFile("image")
-	if err == nil {
-		imagePathNew, err := utils.SaveUploadedFile(c, image, uploadDir)
+	if *role == enum.RoleManager {
+		err = h.utilsRepository.UpdatePeriod(context.TODO(), itemId, "items")
 		if err != nil {
 			appresult.HandleError(c, err)
 			return
 		}
-		imagePath = *imagePathNew
-	}
-
-	baseURL := c.MustGet("baseURL").(string)
-
-	resp, err := h.repository.Update(context.TODO(), itemId, item, imagePath, baseURL)
-	if err != nil {
-		appresult.HandleError(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, resp)
-}
-
-func (h *handler) update(c *gin.Context) {
-	var (
-		imagePath string
-		item      ItemReqDTO
-	)
-
-	id := c.Param("id")
-	itemId, err := strconv.Atoi(id)
-	if err != nil {
-		appresult.HandleError(c, err)
-		return
-	}
-
-	businessID, err := h.repository.GetBusinessesById(context.TODO(), itemId)
-	if err != nil {
-		appresult.HandleError(c, err)
-		return
-	}
-
-	role, err := h.extractUserIdAndRole(c, *businessID)
-	if err != nil {
-		appresult.HandleError(c, err)
-		return
-	}
-
-	if *role != enum.RoleAdmin && *role != enum.RoleManager {
-		appresult.HandleError(c, appresult.ErrForbidden)
-		return
 	}
 
 	jsonData := c.PostForm("data")
@@ -300,41 +241,6 @@ func (h *handler) delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "success!!!",
 	})
-}
-
-func (h *handler) getForUpdate(c *gin.Context) {
-	id := c.Param("id")
-	itemId, err := strconv.Atoi(id)
-	if err != nil {
-		appresult.HandleError(c, err)
-		return
-	}
-
-	businessID, err := h.repository.GetBusinessesById(context.TODO(), itemId)
-	if err != nil {
-		appresult.HandleError(c, err)
-		return
-	}
-	role, err := h.extractUserIdAndRole(c, *businessID)
-	if err != nil {
-		appresult.HandleError(c, err)
-		return
-	}
-
-	if *role != enum.RoleAdmin && *role != enum.RoleManager {
-		appresult.HandleError(c, appresult.ErrForbidden)
-		return
-	}
-
-	baseURL := c.MustGet("baseURL").(string)
-
-	resp, err := h.repository.GetForUpdate(context.TODO(), itemId, baseURL)
-	if err != nil {
-		appresult.HandleError(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, resp)
 }
 
 func (h *handler) extractUserIdAndRole(c *gin.Context, businessesId int) (*string, error) {

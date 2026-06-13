@@ -48,34 +48,28 @@ type GetAllWithCount struct {
 	Items []ItemGetAllDTO `json:"items"`
 }
 
-type ItemForUpdateDTO struct {
-	NameId          int
-	IngredientId    int
-	ContentId       int
-	Value           float64
-	BusinessId      int
-	ItemCategoryIds []int
-	ImagePath       string
-	DiscountPercent int
-	Stock           *int
-}
-
 type DictionaryDTO struct {
 	Tm string `json:"tm"`
 	Ru string `json:"ru"`
 	En string `json:"en"`
 }
 
-type ItemResForUpdateDTO struct {
-	Id              int             `json:"id"`
-	Name            DictionaryDTO   `json:"name"`
-	Ingredient      []DictionaryDTO `json:"ingredients"`
-	Content         DictionaryDTO   `json:"content"`
-	ImagePath       string          `json:"image_path"`
-	Value           float64         `json:"value"`
-	ItemCategories  []Name          `json:"item_categories"`
-	DiscountPercent int             `json:"discount_percent"`
-	Stock           *int            `json:"stock"`
+type ItemUpdateDTO struct {
+	Name       DictionaryDTO   `json:"name"`
+	Ingredient []DictionaryDTO `json:"ingredients"`
+	Content    *DictionaryDTO  `json:"content"`
+	ImagePath  string          `json:"image_path"`
+	Value      float64         `json:"value"`
+	Stock      *int            `json:"stock"`
+}
+
+type ItemForUpdateDTO struct {
+	NameId       int
+	IngredientId *int
+	ContentId    *int
+	ImagePath    string
+	Value        float64
+	Stock        *int
 }
 
 type Name struct {

@@ -367,10 +367,9 @@ func makeItemFilter(filter item.ItemFilter) ([]interface{}, string, string) {
 	return args, q, qCount
 }
 
-func (r *repository) Update(ctx context.Context, itemId int, dto item.ItemReqDTO, imagePath string, baseURL string) (*item.ItemResForUpdateDTO, error) {
+func (r *repository) Update(ctx context.Context, itemId int, dto item.ItemUpdateDTO, imagePath string, baseURL string) (*item.ItemGetOneDTO, error) {
 	var (
-		itm           item.ItemForUpdateDTO
-		contentDictId *int
+		data item.ItemForUpdateDTO
 	)
 
 	tx, err := r.client.Begin(ctx)
@@ -385,83 +384,65 @@ func (r *repository) Update(ctx context.Context, itemId int, dto item.ItemReqDTO
 
 	q := `SELECT 
 		name_dictionary_id, ingredient_dictionary_id, 
-		content_dictionary_id, image_path, value, businesses_id
+		content_dictionary_id, image_path, value, stock
 		FROM items WHERE id = $1`
 	err = tx.QueryRow(ctx, q, itemId).Scan(
-		&itm.NameId, &itm.IngredientId, &contentDictId, &itm.ImagePath,
-		&itm.Value, &itm.BusinessId,
+		&data.NameId, &data.IngredientId, &data.ContentId,
+		&data.ImagePath, &data.Value, &data.Stock,
 	)
 	if err != nil {
+		fmt.Println("error: ", err)
 		return nil, appresult.ErrNotFoundType(itemId, "item")
 	}
 
-	if dto.Name.En != "" && dto.Name.Ru != "" && dto.Name.Tm != "" {
+	if dto.Name.Tm != "" {
 		_, err = tx.Exec(ctx, `UPDATE dictionary SET tm=$1, en=$2, ru=$3 WHERE id=$4`,
-			dto.Name.Tm, dto.Name.En, dto.Name.Ru, itm.NameId)
+			dto.Name.Tm, dto.Name.En, dto.Name.Ru, data.NameId)
 		if err != nil {
+			fmt.Println("error: ", err)
 			return nil, appresult.ErrInternalServer
 		}
 	}
 
-	if len(dto.Ingredient) > 0 {
+	if len(dto.Ingredient) > 0 && data.IngredientId != nil {
 		ingrTm, ingrRu, ingrEn := toString(dto.Ingredient)
 		_, err = tx.Exec(ctx, `UPDATE dictionary SET tm=$1, en=$2, ru=$3 WHERE id=$4`,
-			ingrTm, ingrEn, ingrRu, itm.IngredientId)
+			ingrTm, ingrEn, ingrRu, *data.IngredientId)
 		if err != nil {
+			fmt.Println("error: ", err)
 			return nil, appresult.ErrInternalServer
 		}
 	}
 
-	if dto.BusinessId != 0 {
-		var exists bool
-		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM businesses WHERE id=$1)`, dto.BusinessId).Scan(&exists)
-		if err != nil || !exists {
-			return nil, appresult.ErrNotFoundType(dto.BusinessId, "business")
-		}
-		itm.BusinessId = dto.BusinessId
-	}
-
-	newImage := itm.ImagePath
+	newImage := data.ImagePath
 	if imagePath != "" {
-		utils.DropFiles(&[]string{itm.ImagePath})
+		utils.DropFiles(&[]string{data.ImagePath})
 		newImage = imagePath
 	}
 
-	if dto.Value != 0 || imagePath != "" {
-		_, err = tx.Exec(ctx, `UPDATE items SET value=$1, image_path=$2 WHERE id=$3`,
-			dto.Value, newImage, itemId)
+	if dto.Stock != nil {
+		data.Stock = dto.Stock
+	}
+
+	if dto.Value != 0 {
+		data.Value = dto.Value
+	}
+
+	if dto.Value != 0 || imagePath != "" || dto.Stock != nil {
+		_, err = tx.Exec(ctx, `UPDATE items SET value = $1, image_path = $2, stock = $3 WHERE id=$4`,
+			data.Value, newImage, data.Stock, itemId)
 		if err != nil {
+			fmt.Println("error: ", err)
 			return nil, appresult.ErrInternalServer
 		}
 	}
 
-	if len(dto.ItemCategoryIds) > 0 {
-		var count int
-		checkQuery := `SELECT COUNT(*) FROM item_categories WHERE id = ANY($1) AND businesses_id = $2`
-		err = tx.QueryRow(ctx, checkQuery, dto.ItemCategoryIds, dto.BusinessId).Scan(&count)
-		if err != nil {
-			return nil, appresult.ErrInternalServer
-		}
-		if count != len(dto.ItemCategoryIds) {
-			return nil, appresult.ErrNotFoundTypeStr("item_category in this business")
-		}
-		_, err = tx.Exec(ctx, `DELETE FROM items_item_categories WHERE item_id=$1`, itemId)
-		if err != nil {
-			return nil, appresult.ErrInternalServer
-		}
-		for _, catId := range dto.ItemCategoryIds {
-			_, err = tx.Exec(ctx, `INSERT INTO items_item_categories (item_id, item_category_id) VALUES ($1, $2)`, itemId, catId)
-			if err != nil {
-				return nil, appresult.ErrInternalServer
-			}
-		}
-	}
-
-	if dto.Content.En != "" && dto.Content.Tm != "" && dto.Content.Ru != "" {
-		if contentDictId != nil {
+	if dto.Content != nil {
+		if data.ContentId != nil {
 			_, err = tx.Exec(ctx, `UPDATE dictionary SET tm=$1, en=$2, ru=$3 WHERE id=$4`,
-				dto.Content.Tm, dto.Content.En, dto.Content.Ru, *contentDictId)
+				dto.Content.Tm, dto.Content.En, dto.Content.Ru, data.ContentId)
 			if err != nil {
+				fmt.Println("error: ", err)
 				return nil, appresult.ErrInternalServer
 			}
 		} else {
@@ -471,11 +452,13 @@ func (r *repository) Update(ctx context.Context, itemId int, dto item.ItemReqDTO
 				dto.Content.Tm, dto.Content.En, dto.Content.Ru,
 			).Scan(&newContentId)
 			if err != nil {
+				fmt.Println("error: ", err)
 				return nil, appresult.ErrInternalServer
 			}
 			_, err = tx.Exec(ctx, `UPDATE items SET content_dictionary_id=$1 WHERE id=$2`,
 				newContentId, itemId)
 			if err != nil {
+				fmt.Println("error: ", err)
 				return nil, appresult.ErrInternalServer
 			}
 		}
@@ -486,7 +469,7 @@ func (r *repository) Update(ctx context.Context, itemId int, dto item.ItemReqDTO
 		return nil, appresult.ErrInternalServer
 	}
 
-	updated, err := r.GetForUpdate(ctx, itemId, baseURL)
+	updated, err := r.GetOne(ctx, itemId, baseURL)
 	if err != nil {
 		return nil, appresult.ErrInternalServer
 	}
@@ -549,69 +532,6 @@ func (r *repository) Delete(ctx context.Context, itemId int) error {
 	}
 
 	return nil
-}
-
-func (r *repository) GetForUpdate(ctx context.Context, itemId int, baseURL string) (*item.ItemResForUpdateDTO, error) {
-	var (
-		dto  item.ItemResForUpdateDTO
-		ingr item.DictionaryDTO
-	)
-
-	q := `
-		SELECT 
-			i.id,
-			dn.tm, dn.ru, dn.en,
-			di.tm, di.ru, di.en,
-			i.value,
-			i.image_path
-		FROM items i
-		JOIN dictionary dn ON i.name_dictionary_id = dn.id
-		JOIN dictionary di ON i.ingredient_dictionary_id = di.id
-		WHERE i.id = $1
-	`
-	err := r.client.QueryRow(ctx, q, itemId).Scan(
-		&dto.Id,
-		&dto.Name.Tm, &dto.Name.Ru, &dto.Name.En,
-		&ingr.Tm, &ingr.Ru, &ingr.En,
-		&dto.Value,
-		&dto.ImagePath,
-	)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, appresult.ErrNotFoundType(itemId, "item")
-		}
-		return nil, err
-	}
-
-	dto.Ingredient = SplitDictionary(ingr)
-
-	q = `
-        SELECT d.id, d.tm, d.ru, d.en
-        FROM items_item_categories iic
-        JOIN item_categories ic ON iic.item_category_id = ic.id
-        JOIN dictionary d ON ic.name_dictionary_id = d.id
-        WHERE iic.item_id = $1
-    `
-	rows, err := r.client.Query(ctx, q, itemId)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var cat item.Name
-		if err := rows.Scan(&cat.Id, &cat.Name.Tm, &cat.Name.Ru, &cat.Name.En); err != nil {
-			return nil, err
-		}
-		dto.ItemCategories = append(dto.ItemCategories, cat)
-	}
-
-	if dto.ImagePath != "" && baseURL != "" {
-		cleanPath := strings.ReplaceAll(dto.ImagePath, "\\", "/")
-		dto.ImagePath = fmt.Sprintf("%s/%s", baseURL, cleanPath)
-	}
-
-	return &dto, nil
 }
 
 func (r *repository) GetItemsByBusiness(ctx context.Context, businessId int, baseURL string) (*[]item.ItemGetAllDTO, error) {
