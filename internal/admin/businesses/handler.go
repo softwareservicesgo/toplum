@@ -187,7 +187,7 @@ func (h *handler) getAll(c *gin.Context) {
 
 func (h *handler) update(c *gin.Context) {
 	var (
-		business         BusinessesReqDTO
+		business         BusinessUpdateDTO
 		mainImagePath    string
 		additionalImages []string
 	)
@@ -204,9 +204,31 @@ func (h *handler) update(c *gin.Context) {
 		appresult.HandleError(c, err)
 		return
 	}
+
 	if *role != enum.RoleAdmin && *role != enum.RoleManager {
 		appresult.HandleError(c, appresult.ErrForbidden)
 		return
+	}
+
+	if *role == enum.RoleManager {
+		err = h.utilsRepository.UpdatePeriod(context.TODO(), businessId, "businesses")
+		if err != nil {
+			appresult.HandleError(c, err)
+			return
+		}
+	}
+
+	jsonData := c.PostForm("data")
+	if jsonData != "" {
+		if err := json.Unmarshal([]byte(jsonData), &business); err != nil {
+			appresult.HandleError(c, err)
+			return
+		}
+		err := h.repository.Update(context.TODO(), businessId, business)
+		if err != nil {
+			appresult.HandleError(c, err)
+			return
+		}
 	}
 
 	uploadDir := filepath.Join("uploads/businesses", fmt.Sprintf("businesses_%d", businessId))
@@ -259,19 +281,6 @@ func (h *handler) update(c *gin.Context) {
 
 	if mainImagePath != "" || len(additionalImages) > 0 {
 		if _, err := h.repository.AddImages(context.TODO(), businessId, mainImagePath, additionalImages, ""); err != nil {
-			appresult.HandleError(c, err)
-			return
-		}
-	}
-
-	jsonData := c.PostForm("data")
-	if jsonData != "" {
-		if err := json.Unmarshal([]byte(jsonData), &business); err != nil {
-			appresult.HandleError(c, err)
-			return
-		}
-		err := h.repository.Update(context.TODO(), businessId, business)
-		if err != nil {
 			appresult.HandleError(c, err)
 			return
 		}

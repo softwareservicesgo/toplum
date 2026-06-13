@@ -75,20 +75,16 @@ type BusinessesAllDTO struct {
 	Status          string   `json:"status"`
 }
 
-type BusinessForUpdateDTO struct {
-	Name           string
-	ProvinceId     int
-	DistrictId     int
-	Phone          string
-	DescriptionId  int
-	CategoryId     *int
-	SubcategoryIds []int
-	OpensTime      string
-	ClosesTime     string
-	Expires        int
-	Value          *float32
-	CanOrder       bool
-	CanReserve     bool
+type BusinessUpdateDTO struct {
+	Name              string        `json:"name" `
+	Phone             string        `json:"phone"`
+	Description       DictionaryDTO `json:"description" `
+	OpensTime         string        `json:"opens_time" `
+	ClosesTime        string        `json:"closes_time" `
+	Value             *float32      `json:"value"`
+	Expires           int          `json:"expires"`
+	CanOrder          *bool         `json:"can_order"`
+	CanReserve        *bool         `json:"can_reserve" `
 }
 
 type Index struct {

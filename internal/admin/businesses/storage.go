@@ -7,7 +7,7 @@ type Repository interface {
 	AddImages(ctx context.Context, businessId int, mainImage string, additionalImages []string, baseURL string) (*BusinessesResDTO, error)
 	GetOne(ctx context.Context, businessId int, baseURL string) (*BusinessesResDTO, error)
 	GetAll(ctx context.Context, filter BusinessesFilter, baseURL string) (*[]BusinessesAllDTO, *int, error)
-	Update(ctx context.Context, businessId int, business BusinessesReqDTO) error
+	Update(ctx context.Context, businessId int, business BusinessUpdateDTO) error
 	Delete(ctx context.Context, businessId int) error
 	GetAndDeleteImage(ctx context.Context, businessId int, isMain bool) (*[]string, error)
 	UpdateStatus(ctx context.Context, businessId int, status UpdateStatus)  error

@@ -9,6 +9,7 @@ import (
 	"restaurants/pkg/client/postgresql"
 	"restaurants/pkg/logging"
 	"restaurants/pkg/utils"
+	"time"
 
 	"github.com/jackc/pgx/v4"
 )
@@ -24,6 +25,10 @@ func NewRepository(client postgresql.Client, logger *logging.Logger) utils.Repos
 		logger: logger,
 	}
 }
+
+var (
+	updateLimitDays = 14
+)
 
 func (r *repository) UserRoleById(ctx context.Context, userId int, businessesId *int) (*string, error) {
 	var role string
@@ -51,4 +56,34 @@ func (r *repository) UserRoleById(ctx context.Context, userId int, businessesId 
 	}
 
 	return &role, nil
+}
+
+func (r *repository) UpdatePeriod(ctx context.Context, id int, tableName string) error {
+	var updatedAt time.Time
+
+	query := fmt.Sprintf(`SELECT updated_at FROM %s WHERE id = $1`, tableName)
+
+	err := r.client.QueryRow(ctx, query, id).Scan(&updatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return appresult.ErrNotFoundType(id, tableName)
+		}
+		return err
+	}
+
+	cooldown := time.Duration(updateLimitDays) * 24 * time.Hour
+	limitAt := updatedAt.Add(cooldown)
+
+	if time.Now().UTC().Before(limitAt) {
+		return appresult.ErrUpdatePeriodExpired(updateLimitDays)
+	}
+
+	query = fmt.Sprintf(`UPDATE %s SET updated_at = NOW() WHERE id = $1`, tableName)
+
+	if _, err = r.client.Exec(ctx, query, id); err != nil {
+		fmt.Println("error: ", err)
+		return appresult.ErrInternalServer
+	}
+
+	return nil
 }

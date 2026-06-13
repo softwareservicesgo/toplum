@@ -52,7 +52,6 @@ var (
 	ErrPasswordLength      = NewAppError(nil, "password must be between 8 and 50 characters", "SE-00001")
 	ErrRequiredData        = NewAppError(nil, "Insufficient data. Required fields must be provided", "SE-00001")
 	ErrPhoneNumber         = NewAppError(nil, "Invalid format. Expected format: +993XXXXXXXX (8 digits)", "SE-00001")
-	
 )
 
 var ErrNotFoundType = func(id int, field string) *AppError {
@@ -132,6 +131,14 @@ var ErrSubcategoryCreationNotAllowed = func(id int) *AppError {
 		nil,
 		fmt.Sprintf("Subcategories cannot be created for this category, id = %d", id),
 		"SE-00002",
+	)
+}
+
+var ErrUpdatePeriodExpired = func(day int) *AppError {
+	return NewAppError(
+		nil,
+		fmt.Sprintf("update period expired (%d days limit)", day),
+		"SE-00001",
 	)
 }
 
