@@ -20,12 +20,12 @@ import (
 )
 
 const (
-	registerURL = "/registration"
-	checkOTP    = "/checkOTP"
-	loginURL    = "/login"
-	profile     = "/profile"
-	logout      = "/logout"
-	clientURL   = ""
+	registerURL   = "/registration"
+	checkOTP      = "/checkOTP"
+	loginURL      = "/login"
+	profile       = "/profile"
+	logout        = "/logout"
+	clientURL     = ""
 )
 
 type handler struct {

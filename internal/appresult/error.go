@@ -142,6 +142,22 @@ var ErrUpdatePeriodExpired = func(day int) *AppError {
 	)
 }
 
+var ErrInsufficientQuantity = func(itemId, businessesId int) *AppError {
+	return NewAppError(
+		nil,
+		fmt.Sprintf("Insufficient quantity for item id=%d in this businesses id=%d", itemId, businessesId),
+		"SE-00001",
+	)
+}
+
+var ErrStock = func(itemId int) *AppError {
+	return NewAppError(
+		nil,
+		fmt.Sprintf("insufficient stock for item id=%d", itemId),
+		"SE-00001",
+	)
+}
+
 type AppError struct {
 	Status  bool   `json:"status"`
 	Err     error  `json:"-"`

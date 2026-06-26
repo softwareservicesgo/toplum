@@ -57,11 +57,11 @@ func (h *handler) login(c *gin.Context) {
 	}
 
 	successResult := ReqLoginDTO{
-		Token:        token,
-		Id:           resp.Id,
-		Role:         resp.Role,
-		Name:         resp.Name,
-		BusinessesId: resp.BusinessesId,
+		Token: token,
+		Id:    resp.Id,
+		//Roles: resp.Roles,
+		Name: resp.Name,
+		//	BusinessesId: resp.BusinessesId,
 	}
 	c.JSON(http.StatusOK, successResult)
 }

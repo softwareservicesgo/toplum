@@ -10,6 +10,7 @@ type Repository interface {
 	Update(ctx context.Context, businessId int, business BusinessUpdateDTO) error
 	Delete(ctx context.Context, businessId int) error
 	GetAndDeleteImage(ctx context.Context, businessId int, isMain bool) (*[]string, error)
-	UpdateStatus(ctx context.Context, businessId int, status UpdateStatus)  error
-	Index(ctx context.Context, filter IndexFilter  , baseURL string) (*Index, error)
+	UpdateStatus(ctx context.Context, businessId int, status UpdateStatus) error
+	Index(ctx context.Context, filter IndexFilter, baseURL string) (*Index, error)
+	AssignUser(ctx context.Context, businessId int, request AssignUser) error
 }

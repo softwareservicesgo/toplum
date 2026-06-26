@@ -1026,6 +1026,56 @@ func findBusinessesForIndex(
 	return result, rows.Err()
 }
 
+func (r *repository) AssignUser(ctx context.Context, businessesId int, request businesses.AssignUser) error {
+	var exists bool
+
+	query := `
+		SELECT EXISTS(
+			SELECT 1
+			FROM user_businesses
+			WHERE businesses_id = $1
+				AND user_id = $2
+				AND role = $3
+		)
+	`
+
+	err := r.client.QueryRow(
+		ctx,
+		query,
+		businessesId,
+		request.UserId,
+		request.Role,
+	).Scan(&exists)
+	if err != nil {
+		fmt.Println("error:", err)
+		return appresult.ErrInternalServer
+	}
+	if exists {
+		return appresult.ErrAlreadyData("user in the businesses")
+	}
+
+	query = `
+		INSERT INTO user_businesses
+			(user_id, businesses_id, role)
+		VALUES
+			($1, $2, $3)
+	`
+
+	_, err = r.client.Exec(
+		ctx,
+		query,
+		request.UserId,
+		businessesId,
+		request.Role,
+	)
+	if err != nil {
+		fmt.Println("error:", err)
+		return appresult.ErrInternalServer
+	}
+
+	return nil
+}
+
 func MapSubcategoriesToClassification(
 	subcategories []subcategory.SubcategoriesDTO,
 ) []businesses.Classification {

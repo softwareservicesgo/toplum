@@ -11,9 +11,10 @@ type CreateOrderReq struct {
 }
 
 type Basket struct {
-	ItemId int
-	Price  float64
-	Count  int
+	ItemId          int
+	Price           float64
+	Count           int
+	DiscountPercent *int
 }
 
 type OrderOne struct {
@@ -24,6 +25,8 @@ type OrderOne struct {
 	GeneralBill     float64       `json:"general_bill"`
 	Status          string        `json:"status"`
 	CountItems      int           `json:"count_items"`
+	Place           string        `json:"place"`
+	OrderTime       string        `json:"order_time" binding:"required,datetime=2006-01-02 15:04"`
 	Items           []basket.Item `json:"items"`
 }
 

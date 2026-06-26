@@ -84,7 +84,7 @@ func (h *handler) create(c *gin.Context) {
 		return
 	}
 
-	orderIds, err := h.repository.Create(context.TODO(), clientID, req)
+	orderIds, outStockInBuisnessesId, err := h.repository.Create(context.TODO(), clientID, req)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -92,7 +92,10 @@ func (h *handler) create(c *gin.Context) {
 
 	NotifyOrderUpdate(req.BusinessesIds, clientID, *orderIds, h.repository)
 
-	c.JSON(http.StatusCreated, "succsess!!!")
+	c.JSON(http.StatusCreated, gin.H{
+		"status":                     "created",
+		"out_stock_in_buisnesses_id": outStockInBuisnessesId,
+	})
 }
 
 func (h *handler) getOne(c *gin.Context) {
@@ -149,7 +152,7 @@ func (h *handler) getAllForBusinesses(c *gin.Context) {
 		return
 	}
 
-	role, err := h.extractUserIdAndRole(c, &businessesId)
+	userId, role, err := h.extractUserIdAndRole(c, &businessesId)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -159,18 +162,12 @@ func (h *handler) getAllForBusinesses(c *gin.Context) {
 		return
 	}
 
-	userId, err := utils.ExtractUserIdFromToken(c, h.client)
-	if err != nil {
-		appresult.HandleError(c, err)
-		return
-	}
-
 	limit := c.Query("limit")
 	offset := c.Query("offset")
 	status := c.Query("status")
 	baseURL := c.MustGet("baseURL").(string)
 
-	resp, err := h.repository.GetAllForBusinesses(context.TODO(), businessesId, userId, limit, offset, status, baseURL)
+	resp, err := h.repository.GetAllForBusinesses(context.TODO(), businessesId, *userId, limit, offset, status, baseURL)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -231,7 +228,7 @@ func (h *handler) delete(c *gin.Context) {
 		return
 	}
 
-	NotifyOrderUpdate([]int{businessesId}, clientId, []int{orderID}, h.repository)
+	NotifyOrderUpdate([]int{*businessesId}, *clientId, []int{orderID}, h.repository)
 
 	c.JSON(http.StatusOK, "sucessfull!!!")
 }
@@ -255,13 +252,19 @@ func (h *handler) updateStatusByClient(c *gin.Context) {
 		return
 	}
 
-	businessesId, clientId, err := h.repository.UpdateStatusByClient(c.Request.Context(), clientID, orderID, req)
+	clientId, err := h.repository.UpdateStatusByClient(c.Request.Context(), clientID, orderID, req)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
 	}
 
-	NotifyOrderUpdate([]int{businessesId}, clientId, []int{orderID}, h.repository)
+	businessID, err := h.repository.GetBusinessesById(context.TODO(), orderID)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	NotifyOrderUpdate([]int{*businessID}, *clientId, []int{orderID}, h.repository)
 
 	c.JSON(http.StatusOK, "sucessfull!!!")
 }
@@ -269,25 +272,25 @@ func (h *handler) updateStatusByClient(c *gin.Context) {
 func (h *handler) updateStatusByBusinesses(c *gin.Context) {
 	var req UpdateOrderStatusReq
 
-	role, err := h.extractUserIdAndRole(c, nil)
-	if err != nil {
-		appresult.HandleError(c, err)
-		return
-	}
-	if *role != enum.RoleAdmin && *role != enum.RoleManager {
-		appresult.HandleError(c, appresult.ErrForbidden)
-		return
-	}
-
-	userId, err := utils.ExtractUserIdFromToken(c, h.client)
-	if err != nil {
-		appresult.HandleError(c, err)
-		return
-	}
-
 	orderID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		appresult.HandleError(c, err)
+		return
+	}
+
+	businessID, err := h.repository.GetBusinessesById(context.TODO(), orderID)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	userId, role, err := h.extractUserIdAndRole(c, businessID)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+	if *role != enum.RoleAdmin && *role != enum.RoleManager && *role != enum.RoleOperator {
+		appresult.HandleError(c, appresult.ErrForbidden)
 		return
 	}
 
@@ -296,25 +299,25 @@ func (h *handler) updateStatusByBusinesses(c *gin.Context) {
 		return
 	}
 
-	businessesId, clientId, err := h.repository.UpdateStatusByBusinesses(c.Request.Context(), userId, orderID, req)
+	clientId, err := h.repository.UpdateStatusByBusinesses(c.Request.Context(), *userId, orderID, req)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
 	}
 
-	NotifyOrderUpdate([]int{businessesId}, clientId, []int{orderID}, h.repository)
+	NotifyOrderUpdate([]int{*businessID}, *clientId, []int{orderID}, h.repository)
 
 	c.JSON(http.StatusOK, "sucessfull!!!")
 }
 
-func (h *handler) extractUserIdAndRole(c *gin.Context, businessesId *int) (*string, error) {
+func (h *handler) extractUserIdAndRole(c *gin.Context, businessesId *int) (*int, *string, error) {
 	userId, err := utils.ExtractUserIdFromToken(c, h.client)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	role, err := h.utilsRepository.UserRoleById(context.TODO(), userId, businessesId)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return role, nil
+	return &userId, role, nil
 }

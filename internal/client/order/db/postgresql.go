@@ -8,6 +8,7 @@ import (
 	"restaurants/internal/appresult"
 	"restaurants/internal/client/basket"
 	"restaurants/internal/client/order"
+	"restaurants/internal/enum"
 	"restaurants/pkg/client/postgresql"
 	"restaurants/pkg/logging"
 	"restaurants/pkg/utils"
@@ -31,94 +32,129 @@ func NewRepository(client postgresql.Client, logger *logging.Logger, basketRepos
 	}
 }
 
-func (r *repository) Create(ctx context.Context, clientId int, req order.CreateOrderReq) (*[]int, error) {
-	var orderIds []int
+const (
+	formatDayTime = "2006-01-02 15:04"
+)
+
+func (r *repository) Create(ctx context.Context, clientId int, req order.CreateOrderReq) (*[]int, *[]int, error) {
+	var (
+		orderIds, outStockInBuisnessesId []int
+	)
 
 	tx, err := r.client.Begin(ctx)
 	if err != nil {
-		return nil, appresult.ErrInternalServer
+		return nil, nil, appresult.ErrInternalServer
 	}
 	defer tx.Rollback(ctx)
 
 	parsedTime, err := time.Parse("2006-01-02 15:04", req.OrderTime)
 	if err != nil {
-		return nil, appresult.ErrInternalServer
+		return nil, nil, appresult.ErrInternalServer
 	}
 
 	for _, businessesId := range req.BusinessesIds {
 		var (
-			baskets []order.Basket
-			total   float64
-			orderId int
+			baskets    []order.Basket
+			total      float64
+			orderId    int
+			stock      *int
+			isNotStock bool
 		)
 
 		rows, err := tx.Query(ctx, `
-			SELECT i.id, i.value, b.count
+			SELECT i.id, i.value, b.count, i.stock, i.discount_percent
 			FROM basket b
 			JOIN items i ON b.item_id = i.id
 			WHERE b.user_id = $1 AND i.businesses_id = $2
 		`, clientId, businessesId)
 		if err != nil {
-			return nil, appresult.ErrNotFoundTypeStr("items in basket")
+			return nil, nil, appresult.ErrNotFoundTypeStr("items in basket")
 		}
+		defer rows.Close()
 
 		for rows.Next() {
 			var basket order.Basket
-			if err := rows.Scan(&basket.ItemId, &basket.Price, &basket.Count); err != nil {
-				rows.Close()
-				return nil, appresult.ErrInternalServer
+			if err := rows.Scan(&basket.ItemId, &basket.Price, &basket.Count, &stock, &basket.DiscountPercent); err != nil {
+				return nil, nil, appresult.ErrInternalServer
 			}
-			total += basket.Price * float64(basket.Count)
-			baskets = append(baskets, basket)
+
+			if stock != nil && basket.Count > *stock {
+				isNotStock = true
+			} else {
+
+				if basket.Price != 0 && *basket.DiscountPercent != 0 {
+					x := math.Round((float64(basket.Price)*float64(*basket.DiscountPercent))/10) / 10
+					discountValue := float64(basket.Price) - x
+
+					total += discountValue * float64(basket.Count)
+				} else {
+					total += basket.Price * float64(basket.Count)
+				}
+
+				baskets = append(baskets, basket)
+			}
 		}
-		rows.Close()
 
 		if err := rows.Err(); err != nil {
-			return nil, appresult.ErrInternalServer
+			return nil, nil, appresult.ErrInternalServer
 		}
 
-		if len(baskets) == 0 {
-			return nil, appresult.ErrNotFoundType(businessesId, "basket by businesses")
-		}
+		if isNotStock {
+			outStockInBuisnessesId = append(outStockInBuisnessesId, businessesId)
+		} else {
+			if len(baskets) == 0 {
+				return nil, nil, appresult.ErrNotFoundType(businessesId, "basket by businesses")
+			}
 
-		total = math.Round(total*100) / 100
+			total = math.Round(total*100) / 100
 
-		err = tx.QueryRow(ctx, `
+			err = tx.QueryRow(ctx, `
 			INSERT INTO orders (user_id, businesses_id, total_price, place, order_time)
 			VALUES ($1, $2, $3, $4, $5)
 			RETURNING id
 		`, clientId, businessesId, total, req.Place, parsedTime).Scan(&orderId)
-		if err != nil {
-			return nil, appresult.ErrInternalServer
-		}
-
-		for _, basket := range baskets {
-			_, err = tx.Exec(ctx, `
-				INSERT INTO order_items (order_id, item_id, quantity, price)
-				VALUES ($1, $2, $3, $4)
-			`, orderId, basket.ItemId, basket.Count, basket.Price)
 			if err != nil {
-				return nil, appresult.ErrInternalServer
+				return nil, nil, appresult.ErrInternalServer
 			}
-		}
 
-		_, err = tx.Exec(ctx, `
+			for _, basket := range baskets {
+				_, err = tx.Exec(ctx, `
+				INSERT INTO order_items (order_id, item_id, quantity, price, discount_percent)
+				VALUES ($1, $2, $3, $4, $5)
+			`, orderId, basket.ItemId, basket.Count, basket.Price, basket.DiscountPercent)
+				if err != nil {
+					return nil, nil, appresult.ErrInternalServer
+				}
+
+				query := `
+					UPDATE items
+					SET stock = stock - $1
+					WHERE id = $2 AND stock IS NOT NULL
+				`
+				_, err := tx.Exec(ctx, query, basket.Count, basket.ItemId)
+				if err != nil {
+					return nil, nil, appresult.ErrInternalServer
+				}
+			}
+
+			_, err = tx.Exec(ctx, `
 			DELETE FROM basket
 			WHERE user_id = $1
 			AND item_id IN (SELECT id FROM items WHERE businesses_id = $2)
 		`, clientId, businessesId)
-		if err != nil {
-			return nil, appresult.ErrInternalServer
-		}
+			if err != nil {
+				return nil, nil, appresult.ErrInternalServer
+			}
 
-		orderIds = append(orderIds, orderId)
+			orderIds = append(orderIds, orderId)
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return nil, appresult.ErrInternalServer
+		return nil, nil, appresult.ErrInternalServer
 	}
 
-	return &orderIds, nil
+	return &orderIds, &outStockInBuisnessesId, nil
 }
 
 func (r *repository) GetOne(
@@ -127,10 +163,13 @@ func (r *repository) GetOne(
 	baseURL string,
 ) (*order.OrderOne, error) {
 
-	var result order.OrderOne
+	var (
+		result    order.OrderOne
+		orderTime time.Time
+	)
 
 	err := r.client.QueryRow(ctx, `
-		SELECT b.id, b.name, img.image_path, o.status
+		SELECT b.id, b.name, img.image_path, o.status, o.place, o.order_time, o.total_price
 		FROM orders o
 		JOIN businesses b ON b.id = o.businesses_id
 		JOIN image_businesses img ON img.businesses_id = b.id AND img.is_main = true
@@ -140,6 +179,9 @@ func (r *repository) GetOne(
 		&result.BusinessesName,
 		&result.BusinessesImage,
 		&result.Status,
+		&result.Place,
+		&orderTime,
+		&result.GeneralBill,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -153,16 +195,18 @@ func (r *repository) GetOne(
 		result.BusinessesImage = fmt.Sprintf("%s/%s", baseURL, cleanPath)
 	}
 
-	result.Id = orderId
+	result.GeneralBill = math.Round(result.GeneralBill*10) / 10
 
-	items, total, countItems, err := FindItemsByOrder(ctx, r, orderId, baseURL)
+	result.OrderTime = orderTime.Format(formatDayTime)
+	result.Id = orderId
+	items, countItems, err := FindItemsByOrder(ctx, r, orderId, baseURL)
 	if err != nil {
+		fmt.Println("error2: ", err)
 		return nil, err
 	}
 
 	result.Items = items
 	result.CountItems = countItems
-	result.GeneralBill = math.Round(total*100) / 100
 
 	return &result, nil
 }
@@ -172,22 +216,21 @@ func FindItemsByOrder(
 	r *repository,
 	orderId int,
 	baseURL string,
-) ([]basket.Item, float64, int, error) {
+) ([]basket.Item, int, error) {
 	var (
-		items      []basket.Item
-		total      float64
-		countItems int
+		items                       []basket.Item
+		countItems, discountPercent int
 	)
 
 	rows, err := r.client.Query(ctx, `
-		SELECT i.id, i.image_path, d.tm, d.en, d.ru, oi.price, oi.quantity
+		SELECT i.id, i.image_path, d.tm, d.en, d.ru, oi.price, oi.quantity, oi.discount_percent
 		FROM order_items oi
 		JOIN items i ON oi.item_id = i.id
 		JOIN dictionary d ON i.name_dictionary_id = d.id
 		WHERE oi.order_id = $1
 	`, orderId)
 	if err != nil {
-		return nil, 0, 0, appresult.ErrInternalServer
+		return nil, 0, appresult.ErrInternalServer
 	}
 	defer rows.Close()
 
@@ -201,8 +244,9 @@ func FindItemsByOrder(
 			&item.Name.Ru,
 			&item.Value,
 			&item.Count,
+			&discountPercent,
 		); err != nil {
-			return nil, 0, 0, appresult.ErrInternalServer
+			return nil, 0, appresult.ErrInternalServer
 		}
 
 		if baseURL != "" {
@@ -210,20 +254,27 @@ func FindItemsByOrder(
 		}
 
 		item.Value = math.Round(item.Value*100) / 100
-		total += item.Value * float64(item.Count)
+
+		if item.Value != 0 && discountPercent != 0 {
+			x := math.Round((float64(item.Value)*float64(discountPercent))/10) / 10
+			discountValue := float64(item.Value) - x
+
+			item.DiscountValue = &discountValue
+		}
+
 		countItems += item.Count
 		items = append(items, item)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, 0, 0, appresult.ErrInternalServer
+		return nil, 0, appresult.ErrInternalServer
 	}
 
 	if len(items) == 0 {
-		return nil, 0, 0, appresult.ErrNotFoundType(orderId, "items in order")
+		return nil, 0, appresult.ErrNotFoundType(orderId, "items in order")
 	}
 
-	return items, total, countItems, nil
+	return items, countItems, nil
 }
 
 func (r *repository) GetAllForClient(
@@ -314,7 +365,7 @@ func (r *repository) GetAllForClient(
 			&ord.CountItems,
 			&ord.Status,
 		); err != nil {
-			fmt.Println("3error: ", err)
+			fmt.Println("error: ", err)
 			return nil, appresult.ErrInternalServer
 		}
 
@@ -323,11 +374,12 @@ func (r *repository) GetAllForClient(
 			ord.BusinessesImage = fmt.Sprintf("%s/%s", baseURL, cleanPath)
 		}
 
-		items, _, _, err := FindItemsByOrder(ctx, r, ord.Id, baseURL)
+		items, _, err := FindItemsByOrder(ctx, r, ord.Id, baseURL)
 		if err != nil {
 			return nil, err
 		}
 
+		ord.GeneralBill = math.Round(ord.GeneralBill*10) / 10
 		ord.Items = items
 
 		orders = append(orders, ord)
@@ -350,31 +402,36 @@ func (r *repository) GetAllForBusinesses(
 	limitStr, offsetStr, status, baseURL string,
 ) (*order.OrderAllForBusinesses, error) {
 	var (
-		orders           []order.OrdersForBusinesses
-		count            int
-		args             []interface{}
-		role             string
-		userBusinessesId *int
+		orders []order.OrdersForBusinesses
+		count  int
+		args   []interface{}
+		// role             string
+		// userBusinessesId *int
 	)
 
-	err := r.client.QueryRow(ctx, `
-		SELECT role, businesses_id FROM users WHERE id = $1
-	`, userId).Scan(&role, &userBusinessesId)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, appresult.ErrNotFoundType(userId, "user")
-		}
-		return nil, appresult.ErrInternalServer
-	}
+	// err := r.client.QueryRow(ctx, `
+	// 	SELECT ub.role, u.businesses_id
+	// 		FROM users u
+	// 		JOIN user_businesses ub ON ub.user_id = u.id AND ub.businesses_id = u.businesses_id
+	// 		WHERE u.id = $1
+	// `, userId).Scan(&role, &userBusinessesId)
+	// if err != nil {
+	// 	if errors.Is(err, pgx.ErrNoRows) {
+	// 		return nil, appresult.ErrNotFoundType(userId, "user")
+	// 	}
+	// 	fmt.Println("error: ", err)
+	// 	return nil, appresult.ErrInternalServer
+	// }
 
-	if role == "MANAGER" {
-		if userBusinessesId == nil || *userBusinessesId != businessesId {
-			return nil, appresult.ErrForbidden
-		}
-	}
+	// if role == "MANAGER" {
+	// 	if userBusinessesId == nil || *userBusinessesId != businessesId {
+	// 		return nil, appresult.ErrForbidden
+	// 	}
+	// }
 
 	limitInt, offsetInt, err := utils.ParsePagination(limitStr, offsetStr)
 	if err != nil {
+		fmt.Println("error: ", err)
 		return nil, err
 	}
 
@@ -393,6 +450,7 @@ func (r *repository) GetAllForBusinesses(
 		args...,
 	).Scan(&count)
 	if err != nil {
+		fmt.Println("error: ", err)
 		return nil, appresult.ErrInternalServer
 	}
 
@@ -408,18 +466,18 @@ func (r *repository) GetAllForBusinesses(
 		SELECT
 			o.id,
 			o.total_price,
-			c.id,
+			u.id,
 			CASE
-				WHEN c.last_name IS NOT NULL AND c.last_name != ''
-				THEN c.name || ' ' || c.last_name
-				ELSE c.name
+				WHEN u.last_name IS NOT NULL AND u.last_name != ''
+				THEN u.name || ' ' || u.last_name
+				ELSE u.name
 			END,
-			COALESCE(c.image_path, ''),
-			c.phone_number,
+			COALESCE(u.image_path, ''),
+			u.phone_number,
 			(SELECT COALESCE(SUM(quantity), 0) FROM order_items WHERE order_id = o.id) as count_items,
 			o.status
 		FROM orders o
-		JOIN clients c ON o.user_id = c.id
+		JOIN users u ON o.user_id = u.id
 		%s
 		ORDER BY o.created_at DESC
 		LIMIT $%d OFFSET $%d
@@ -427,6 +485,7 @@ func (r *repository) GetAllForBusinesses(
 
 	rows, err := r.client.Query(ctx, qRes, args...)
 	if err != nil {
+		fmt.Println("error: ", err)
 		return nil, appresult.ErrInternalServer
 	}
 	defer rows.Close()
@@ -443,17 +502,19 @@ func (r *repository) GetAllForBusinesses(
 			&ord.CountItems,
 			&ord.Status,
 		); err != nil {
+			fmt.Println("error: ", err)
 			return nil, appresult.ErrInternalServer
 		}
 
 		if ord.Client.ImagePath != "" && baseURL != "" {
 			ord.Client.ImagePath = fmt.Sprintf("%s/%s", baseURL, strings.ReplaceAll(ord.Client.ImagePath, "\\", "/"))
 		}
-		ord.GeneralBill = math.Round(ord.GeneralBill*100) / 100
+		ord.GeneralBill = math.Round(ord.GeneralBill*10) / 10
 		orders = append(orders, ord)
 	}
 
 	if err := rows.Err(); err != nil {
+		fmt.Println("error: ", err)
 		return nil, appresult.ErrInternalServer
 	}
 
@@ -470,11 +531,19 @@ func (r *repository) Update(
 	dto order.UpdateOrderReq,
 	baseURL string,
 ) (*order.OrderOne, error) {
+	tx, err := r.client.Begin(ctx)
+	if err != nil {
+		fmt.Println("error1: ", err)
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
 
 	var (
-		status string
+		status        string
+		total         float64
+		existingItems []order.UpdateItem
 	)
-	err := r.client.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT status FROM orders
 		WHERE id = $1 AND user_id = $2
 	`, orderID, clientID).Scan(&status)
@@ -496,24 +565,40 @@ func (r *repository) Update(
 		return nil, appresult.ErrTimee
 	}
 
-	tx, err := r.client.Begin(ctx)
-	if err != nil {
-		fmt.Println("error: ", err)
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-
-	_, err = tx.Exec(ctx, `
-		UPDATE orders
-		SET place = $1,
-		    order_time = $2,
-		    updated_at = now()
-		WHERE id = $3
-	`, dto.Place, orderTime, orderID)
-
+	rows, err := tx.Query(ctx, `
+		SELECT item_id, quantity
+		FROM order_items
+		WHERE order_id = $1
+	`, orderID)
 	if err != nil {
 		fmt.Println("error: ", err)
 		return nil, appresult.ErrInternalServer
+	}
+
+	for rows.Next() {
+		var oi order.UpdateItem
+		if err = rows.Scan(&oi.ItemID, &oi.Quantity); err != nil {
+			rows.Close()
+			return nil, appresult.ErrInternalServer
+		}
+		existingItems = append(existingItems, oi)
+	}
+	rows.Close()
+
+	if err = rows.Err(); err != nil {
+		return nil, appresult.ErrInternalServer
+	}
+
+	for _, oi := range existingItems {
+		_, err = tx.Exec(ctx, `
+        UPDATE items
+        SET stock = stock + $1
+        WHERE id = $2
+        AND stock IS NOT NULL
+    `, oi.Quantity, oi.ItemID)
+		if err != nil {
+			return nil, appresult.ErrInternalServer
+		}
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -525,30 +610,74 @@ func (r *repository) Update(
 	}
 
 	for _, item := range dto.Items {
+		var (
+			discountPercent int
+			value           float64
+			stock           *int
+		)
+
+		err := tx.QueryRow(ctx, `
+			SELECT value, discount_percent, stock
+			FROM items
+			WHERE id = $1
+		`, item.ItemID).Scan(
+			&value,
+			&discountPercent,
+			&stock,
+		)
+
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, appresult.ErrNotFoundType(item.ItemID, "item")
+			}
+			fmt.Println("error: ", err)
+			return nil, appresult.ErrInternalServer
+		}
+
+		if stock != nil {
+			res, err := tx.Exec(ctx, `
+			UPDATE items
+			SET stock = stock - $1
+			WHERE id = $2 AND stock IS NOT NULL AND stock >= $1
+		`, item.Quantity, item.ItemID)
+
+			if err != nil {
+				fmt.Println("error: ", err)
+				return nil, appresult.ErrInternalServer
+			}
+
+			if res.RowsAffected() == 0 {
+				return nil, appresult.ErrStock(item.ItemID)
+			}
+		}
 
 		_, err = tx.Exec(ctx, `
-			INSERT INTO order_items (order_id, item_id, quantity, price)
-			SELECT $1, $2, $3, i.value
-			FROM items i
-			WHERE i.id = $2
-		`, orderID, item.ItemID, item.Quantity)
+			INSERT INTO order_items (order_id, item_id, quantity, price, discount_percent)
+			VALUES ( $1, $2, $3, $4, $5 )
+		`, orderID, item.ItemID, item.Quantity, value, discountPercent)
 
 		if err != nil {
 			fmt.Println("error: ", err)
 			return nil, appresult.ErrInternalServer
 		}
+
+		if value != 0 && discountPercent != 0 {
+			x := math.Round((float64(value)*float64(discountPercent))/10) / 10
+			discountValue := float64(value) - x
+			total += discountValue * float64(item.Quantity)
+		} else {
+			total += value * float64(item.Quantity)
+		}
 	}
 
 	_, err = tx.Exec(ctx, `
 		UPDATE orders
-		SET total_price = sub.total
-		FROM (
-			SELECT COALESCE(SUM(quantity * price), 0) AS total
-			FROM order_items
-			WHERE order_id = $1
-		) sub
-		WHERE id = $1
-	`, orderID)
+		SET place = $1,
+		    order_time = $2,
+			total_price = $3,
+		    updated_at = now()
+		WHERE id = $4
+	`, dto.Place, orderTime, total, orderID)
 
 	if err != nil {
 		fmt.Println("error: ", err)
@@ -566,16 +695,20 @@ func (r *repository) Delete(
 	ctx context.Context,
 	clientID int,
 	orderID int,
-) (int, int, error) {
+) (*int, *int, error) {
 
 	tx, err := r.client.Begin(ctx)
 	if err != nil {
-		return 0, 0, err
+		return nil, nil, err
 	}
 	defer tx.Rollback(ctx)
 
-	var status string
-	var businessesId int
+	var (
+		status        string
+		businessesId  int
+		existingItems []order.UpdateItem
+	)
+
 	err = tx.QueryRow(ctx, `
 		SELECT status, businesses_id
 		FROM orders
@@ -584,30 +717,62 @@ func (r *repository) Delete(
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, 0, appresult.ErrNotFoundType(orderID, "order")
+			return nil, nil, appresult.ErrNotFoundType(orderID, "order")
 		}
-		return 0, 0, appresult.ErrInternalServer
+		return nil, nil, appresult.ErrInternalServer
 	}
 
 	if status != "PENDING" {
-		return 0, 0, appresult.ErrStatus
+		return nil, nil, appresult.ErrStatus
+	}
+
+	rows, err := tx.Query(ctx, `
+		SELECT item_id, quantity
+		FROM order_items
+		WHERE order_id = $1
+	`, orderID)
+
+	for rows.Next() {
+		var oi order.UpdateItem
+		if err = rows.Scan(&oi.ItemID, &oi.Quantity); err != nil {
+			rows.Close()
+			return nil, nil, appresult.ErrInternalServer
+		}
+		existingItems = append(existingItems, oi)
+	}
+	rows.Close()
+
+	if err = rows.Err(); err != nil {
+		return nil, nil, appresult.ErrInternalServer
+	}
+
+	for _, oi := range existingItems {
+		_, err = tx.Exec(ctx, `
+        UPDATE items
+        SET stock = stock + $1
+        WHERE id = $2
+		AND stock IS NOT NULL
+    `, oi.Quantity, oi.ItemID)
+		if err != nil {
+			return nil, nil, appresult.ErrInternalServer
+		}
 	}
 
 	_, err = tx.Exec(ctx, `
 		DELETE FROM order_items WHERE order_id = $1
 	`, orderID)
 	if err != nil {
-		return 0, 0, appresult.ErrInternalServer
+		return nil, nil, appresult.ErrInternalServer
 	}
 
 	_, err = tx.Exec(ctx, `
 		DELETE FROM orders WHERE id = $1
 	`, orderID)
 	if err != nil {
-		return 0, 0, appresult.ErrInternalServer
+		return nil, nil, appresult.ErrInternalServer
 	}
 
-	return businessesId, clientID, tx.Commit(ctx)
+	return &businessesId, &clientID, tx.Commit(ctx)
 }
 
 func (r *repository) UpdateStatusByClient(
@@ -615,93 +780,144 @@ func (r *repository) UpdateStatusByClient(
 	clientID int,
 	orderID int,
 	req order.UpdateOrderStatusReq,
-) (int, int, error) {
-	return r.updateOrderStatus(ctx, orderID, clientID, "client", req.Status, req.Reason)
+) (*int, error) {
+	var exist bool
+
+	query := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM orders
+			WHERE id = $1
+			  AND user_id = $2
+		)
+	`
+
+	err := r.client.QueryRow(ctx, query, orderID, clientID).Scan(&exist)
+	if err != nil {
+		fmt.Println("error:", err)
+		return nil, appresult.ErrInternalServer
+	}
+
+	if !exist {
+		return nil, appresult.ErrNotFoundType(clientID, " for user")
+	}
+
+	return r.updateOrderStatus(ctx, nil, orderID, "client", req.Status, req.Reason)
 }
 
 func (r *repository) UpdateStatusByBusinesses(
 	ctx context.Context,
-	userID int,
+	userId int,
 	orderID int,
 	req order.UpdateOrderStatusReq,
-) (int, int, error) {
-	return r.updateOrderStatus(ctx, orderID, userID, "businesses", req.Status, req.Reason)
+) (*int, error) {
+	return r.updateOrderStatus(ctx, &userId, orderID, "businesses", req.Status, req.Reason)
 }
 
 func (r *repository) updateOrderStatus(
 	ctx context.Context,
+	userID *int,
 	orderID int,
-	ownerID int,
 	role string,
 	newStatus string,
 	reason string,
-) (int, int, error) {
+) (*int, error) {
 
 	var currentStatus string
-	var clientId, businessesId int
+	var clientId int
 
-	query := ""
-	if role == "client" {
-		query = `
-				SELECT status, user_id, businesses_id
+	query := `
+				SELECT status, user_id
 			FROM orders 
-			WHERE id = $1 AND user_id = $2
+			WHERE id = $1
 		`
-	} else {
-		query = `
-				SELECT o.status, o.user_id, o.businesses_id
-			FROM orders o
-			JOIN users u ON u.id = $2
-			WHERE o.id = $1 AND o.businesses_id = u.businesses_id
-		`
-	}
 
-	err := r.client.QueryRow(ctx, query, orderID, ownerID).Scan(&currentStatus, &clientId, &businessesId)
+	err := r.client.QueryRow(ctx, query, orderID).Scan(&currentStatus, &clientId)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, 0, appresult.ErrNotFoundType(orderID, "order")
+			return nil, appresult.ErrNotFoundType(orderID, "order")
 		}
-		return 0, 0, appresult.ErrInternalServer
+		fmt.Println("error: ", err)
+		return nil, appresult.ErrInternalServer
 	}
 
 	allowed := false
 	if role == "client" {
-		if currentStatus == "APPROVED" && newStatus == "COMPLETED_BY_CLIENT" {
+		if currentStatus == enum.APPROVED && newStatus == enum.COMPLETED_BY_CLIENT {
 			allowed = true
 		}
-		if currentStatus == "PENDING" && newStatus == "CANCELED_BY_CLIENT" {
+		if currentStatus == enum.PENDING && newStatus == enum.CANCELED_BY_CLIENT {
 			allowed = true
 		}
 	} else {
-		if currentStatus == "PENDING" && newStatus == "APPROVED" {
+		if currentStatus == enum.PENDING && newStatus == enum.APPROVED {
 			allowed = true
 		}
-		if currentStatus == "APPROVED" && newStatus == "COMPLETED_BY_BUSINESSES" {
+		if currentStatus == enum.APPROVED && newStatus == enum.COMPLETED_BY_BUSINESSES {
 			allowed = true
 		}
-		if currentStatus == "PENDING" && newStatus == "CANCELED_BY_BUSINESSES" {
+		if currentStatus == enum.PENDING && newStatus == enum.CANCELED_BY_BUSINESSES {
 			allowed = true
 		}
 	}
 
 	if !allowed {
-		return 0, 0, appresult.ErrStatus
+		return nil, appresult.ErrStatus
 	}
 
-	if strings.HasPrefix(newStatus, "CANCELED") && reason == "" {
-		return 0, 0, appresult.ErrReason
+	if strings.HasPrefix(newStatus, enum.CANCELED) {
+		if reason == "" {
+			return nil, appresult.ErrRequired("reason")
+		} else if len(reason) > 150 {
+			return nil, appresult.ErrOverLimit(150, "reason")
+		}
 	}
 
-	_, err = r.client.Exec(ctx, `
+	q := `
 		UPDATE orders
-		SET status=$1, reason=$2, updated_at=now()
-		WHERE id=$3
-	`, newStatus, reason, orderID)
+			SET status=$1, reason=$2, updated_at=now() %s
+			WHERE id=$3
+		`
+
+	if newStatus == enum.APPROVED && userID != nil {
+		x := fmt.Sprintf(", approved_by_id = %d", *userID)
+		q = fmt.Sprintf(q, x)
+	} else {
+		q = fmt.Sprintf(q, "")
+	}
+
+	_, err = r.client.Exec(ctx, q, newStatus, reason, orderID)
 
 	if err != nil {
-		fmt.Println(err)
-		return 0, 0, appresult.ErrInternalServer
+		fmt.Println("error: ", err)
+		return nil, appresult.ErrInternalServer
 	}
 
-	return businessesId, clientId, nil
+	return &clientId, nil
+}
+
+func (r *repository) GetBusinessesById(
+	ctx context.Context,
+	orderId int,
+) (*int, error) {
+
+	var businessesId int
+
+	q := `
+		SELECT businesses_id
+		FROM orders
+		WHERE id = $1;
+	`
+
+	err := r.client.QueryRow(ctx, q, orderId).Scan(&businessesId)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			fmt.Println("error: ", err)
+			return nil, appresult.ErrNotFoundType(orderId, "order")
+		}
+		return nil, appresult.ErrInternalServer
+	}
+
+	return &businessesId, nil
 }

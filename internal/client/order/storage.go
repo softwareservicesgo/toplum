@@ -3,14 +3,15 @@ package order
 import "context"
 
 type Repository interface {
-	Create(ctx context.Context, clientID int, order CreateOrderReq) (*[]int, error)
+	Create(ctx context.Context, clientID int, order CreateOrderReq) (*[]int, *[]int, error)
 	GetOne(ctx context.Context, orderId int, baseURL string) (*OrderOne, error)
 	GetAllForClient(ctx context.Context, clientID int, limit, offset, status, search, baseURL string) (*OrderAllForClient, error)
 	GetAllForBusinesses(ctx context.Context, businessesId, userId int, limit, offset, status, baseURL string) (*OrderAllForBusinesses, error)
 	Update(ctx context.Context, clientID, orderID int, req UpdateOrderReq, baseURL string) (*OrderOne, error)
-	Delete(ctx context.Context, clientID, orderID int) (int, int, error) 
-	UpdateStatusByBusinesses(ctx context.Context, userId, orderID int, req UpdateOrderStatusReq) (int, int, error)
-	UpdateStatusByClient(ctx context.Context, clientID, orderID int, req UpdateOrderStatusReq) (int, int, error) 
+	Delete(ctx context.Context, clientID, orderID int) (*int, *int, error)
+	UpdateStatusByBusinesses(ctx context.Context, userId, orderID int, req UpdateOrderStatusReq) (*int, error)
+	UpdateStatusByClient(ctx context.Context, clientID, orderID int, req UpdateOrderStatusReq) (*int, error)
+	GetBusinessesById(ctx context.Context, orderId int) (*int, error)
 }
 
 type RepositoryWS interface {

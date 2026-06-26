@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"restaurants/internal/admin/auth"
 	"restaurants/internal/appresult"
@@ -26,7 +25,7 @@ func NewRepository(client postgresql.Client, logger *logging.Logger) auth.Reposi
 
 func (r *repository) Login(ctx context.Context, dto auth.LoginDTO) (*auth.ResLoginDTO, error) {
 	q := `
-			SELECT id, password, role, name, businesses_id
+			SELECT id, password, name
 			FROM users
 			WHERE name = $1
 		`
@@ -39,15 +38,15 @@ func (r *repository) Login(ctx context.Context, dto auth.LoginDTO) (*auth.ResLog
 
 	for rows.Next() {
 		var resp auth.ResLoginDTO
-		var businessesId sql.NullInt64
+		//var businessesId sql.NullInt64
 
-		if err := rows.Scan(&resp.Id, &resp.Password, &resp.Role, &resp.Name, &businessesId); err != nil {
+		if err := rows.Scan(&resp.Id, &resp.Password, &resp.Name); err != nil { // &resp.Role, &businessesId
 			return nil, appresult.ErrInternalServer
 		}
 
-		if businessesId.Valid {
-			resp.BusinessesId = int(businessesId.Int64)
-		}
+		// if businessesId.Valid {
+		// 	resp.BusinessesId = int(businessesId.Int64)
+		// }
 
 		if bcrypt.CompareHashAndPassword([]byte(resp.Password), []byte(dto.Password)) == nil {
 			return &resp, nil

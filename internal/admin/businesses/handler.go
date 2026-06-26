@@ -27,6 +27,7 @@ const (
 	businessesById       = "/:id"
 	businessesStatusById = "/status/:id"
 	businessesIndex      = "/index"
+	assignUser           = "/assignUser/:id"
 )
 
 type handler struct {
@@ -61,6 +62,7 @@ func (h *handler) Register(router *gin.RouterGroup) {
 	router.DELETE(businessesById, middleware.JwtTokenCheck(h.client), h.delete)
 	router.PATCH(businessesStatusById, middleware.JwtTokenCheck(h.client), h.updateSatus)
 	router.GET(businessesIndex, middleware.JwtTokenCheck(h.client), h.index)
+	router.POST(assignUser, middleware.JwtTokenCheck(h.client), h.assignUser)
 }
 
 func (h *handler) create(c *gin.Context) {
@@ -387,6 +389,46 @@ func (h *handler) index(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func (h *handler) assignUser(c *gin.Context) {
+	var request AssignUser
+
+	id := c.Param("id")
+	businessId, err := strconv.Atoi(id)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	role, err := h.extractUserIdAndRole(c, &businessId)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+	if *role != enum.RoleAdmin && *role != enum.RoleManager {
+		appresult.HandleError(c, appresult.ErrForbidden)
+		return
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	fmt.Println(request.Role)
+	if !enum.IsValidRole(request.Role) {
+		appresult.HandleError(c, appresult.ErrRole)
+		return
+	}
+
+	err = h.repository.AssignUser(context.TODO(), businessId, request)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, "")
 }
 
 func (h *handler) extractUserIdAndRole(c *gin.Context, businessId *int) (*string, error) {
