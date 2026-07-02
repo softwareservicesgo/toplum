@@ -33,7 +33,11 @@ func (r *RepositoryWS) CheckBusinesses(ctx context.Context, businessesId int, us
 		return appresult.ErrNotFoundType(businessesId, "businesses")
 	}
 
-	queryClient := `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND (businesses_id = $2 OR role = 'admin'))`
+	queryClient := `SELECT EXISTS(SELECT 1 
+					FROM user_businesses 
+					WHERE user_id = $1 
+					AND (businesses_id = $2 OR role = 'admin'))
+				`
 	err = r.client.QueryRow(ctx, queryClient, userId, businessesId).Scan(&exists)
 	if err != nil {
 		fmt.Println("error :", err)
@@ -49,7 +53,7 @@ func (r *RepositoryWS) CheckBusinesses(ctx context.Context, businessesId int, us
 func (r *RepositoryWS) CheckClient(ctx context.Context, clientId int) error {
 	var exists bool
 
-	query := `SELECT EXISTS(SELECT 1 FROM clients WHERE id = $1)`
+	query := `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)`
 	err := r.client.QueryRow(ctx, query, clientId).Scan(&exists)
 	if err != nil {
 		fmt.Println("error :", err)

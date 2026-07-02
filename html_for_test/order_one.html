@@ -372,89 +372,109 @@
       function renderOrder(o) {
         const status = o.status || "UNKNOWN";
         const price = Number(o.general_bill || 0).toFixed(2);
-        const client = o.client?.full_name || "—";
-        const biz = o.businesses?.name || o.businesses_name || "—";
-        const items = o.order_items || o.items || [];
-        const created = o.created_at
-          ? new Date(o.created_at).toLocaleString()
-          : "—";
+
+        const biz = o.businesses_name || "—";
+        const approvedBy = o.approved_by?.fullName || "—";
+        const created = o.order_time || "—";
+
+        const items = o.items || [];
 
         // meta panel
         const meta = document.getElementById("orderMeta");
         meta.innerHTML = `
-          <div class="order-id">#${o.id}</div>
-          <div class="order-id-label">Order ID</div>
-          <div class="meta-grid">
-            <div class="meta-item">
-              <label>Status</label>
-              <div class="val"><span class="status-tag s-${status}">${status}</span></div>
-            </div>
-            <div class="meta-item">
-              <label>Total</label>
-              <div class="val price">${price} TMT</div>
-            </div>
-            <div class="meta-item">
-              <label>Client</label>
-              <div class="val">${client}</div>
-            </div>
-            <div class="meta-item">
-              <label>Restaurant</label>
-              <div class="val">${biz}</div>
-            </div>
-            <div class="meta-item">
-              <label>Created</label>
-              <div class="val" style="font-size:0.8rem;">${created}</div>
-            </div>
-            <div class="meta-item">
-              <label>Items</label>
-              <div class="val">${items.length} item(s)</div>
-            </div>
-          </div>`;
+    <div class="order-id">#${o.id}</div>
+    <div class="order-id-label">Order ID</div>
 
-        // pulse animation on update
+    <div class="meta-grid">
+      <div class="meta-item">
+        <label>Status</label>
+        <div class="val">
+          <span class="status-tag s-${status}">${status}</span>
+        </div>
+      </div>
+
+      <div class="meta-item">
+        <label>Total</label>
+        <div class="val price">${price} TMT</div>
+      </div>
+
+      <div class="meta-item">
+        <label>Restaurant</label>
+        <div class="val">${biz}</div>
+      </div>
+
+      <div class="meta-item">
+        <label>Approved By</label>
+        <div class="val">${approvedBy}</div>
+      </div>
+
+      <div class="meta-item">
+        <label>Order Time</label>
+        <div class="val" style="font-size:0.8rem;">${created}</div>
+      </div>
+
+      <div class="meta-item">
+        <label>Items</label>
+        <div class="val">${o.count_items || items.length}</div>
+      </div>
+    </div>
+  `;
+
+        // pulse animation
         const panel = document.getElementById("infoPanel");
         panel.classList.remove("updated");
         void panel.offsetWidth;
         panel.classList.add("updated");
 
         // items panel
-        if (items.length) {
+        if (items.length > 0) {
           document.getElementById("itemsPanel").style.display = "block";
           document.getElementById("itemCount").textContent =
-            `${items.length} item(s)`;
+            `${o.count_items || items.length} item(s)`;
 
-          let rows = items
+          const rows = items
             .map((item) => {
-              const unitPrice = Number(item.price || 0).toFixed(2);
-              const qty = item.quantity || item.count || 1;
-              const total = (Number(item.price || 0) * qty).toFixed(2);
-              const name = item.product?.name || item.name || "—";
+              const qty = item.count || 1;
+
+              const priceValue = Number(item.discount_value ?? item.value ?? 0);
+              const unitPrice = priceValue.toFixed(2);
+              const total = (priceValue * qty).toFixed(2);
+
+              const name =
+                item.name?.tm || item.name?.en || item.name?.ru || "—";
+
               return `
-              <tr>
-                <td>${name}</td>
-                <td class="td-qty">${qty}</td>
-                <td class="td-price">${unitPrice}</td>
-                <td class="td-total">${total} TMT</td>
-              </tr>`;
+          <tr>
+            <td>${name}</td>
+            <td class="td-qty">${qty}</td>
+            <td class="td-price">${unitPrice}</td>
+            <td class="td-total">${total} TMT</td>
+          </tr>
+        `;
             })
             .join("");
 
           document.getElementById("itemsWrap").innerHTML = `
-            <table class="items-table">
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th style="text-align:center;">Qty</th>
-                  <th style="text-align:right;">Price</th>
-                  <th style="text-align:right;">Total</th>
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>
-            <div class="total-row">
-              <span class="total-label">Grand Total</span>
-              <span class="total-val">${price} TMT</span>
-            </div>`;
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th style="text-align:center;">Qty</th>
+            <th style="text-align:right;">Price</th>
+            <th style="text-align:right;">Total</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+
+      <div class="total-row">
+        <span class="total-label">Grand Total</span>
+        <span class="total-val">${price} TMT</span>
+      </div>
+    `;
         } else {
           document.getElementById("itemsPanel").style.display = "none";
         }

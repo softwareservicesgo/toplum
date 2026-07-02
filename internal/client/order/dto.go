@@ -2,6 +2,7 @@ package order
 
 import (
 	"restaurants/internal/client/basket"
+	"restaurants/internal/client/user"
 )
 
 type CreateOrderReq struct {
@@ -28,6 +29,7 @@ type OrderOne struct {
 	Place           string        `json:"place"`
 	OrderTime       string        `json:"order_time" binding:"required,datetime=2006-01-02 15:04"`
 	Items           []basket.Item `json:"items"`
+	ApprovedBy      *user.User    `json:"approved_by"`
 }
 
 type OrderAllForClient struct {

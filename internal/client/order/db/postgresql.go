@@ -8,6 +8,7 @@ import (
 	"restaurants/internal/appresult"
 	"restaurants/internal/client/basket"
 	"restaurants/internal/client/order"
+	"restaurants/internal/client/user"
 	"restaurants/internal/enum"
 	"restaurants/pkg/client/postgresql"
 	"restaurants/pkg/logging"
@@ -164,12 +165,13 @@ func (r *repository) GetOne(
 ) (*order.OrderOne, error) {
 
 	var (
-		result    order.OrderOne
-		orderTime time.Time
+		result       order.OrderOne
+		orderTime    time.Time
+		approvedById *int
 	)
 
 	err := r.client.QueryRow(ctx, `
-		SELECT b.id, b.name, img.image_path, o.status, o.place, o.order_time, o.total_price
+		SELECT b.id, b.name, img.image_path, o.status, o.place, o.order_time, o.total_price, o.approved_by_id
 		FROM orders o
 		JOIN businesses b ON b.id = o.businesses_id
 		JOIN image_businesses img ON img.businesses_id = b.id AND img.is_main = true
@@ -182,6 +184,7 @@ func (r *repository) GetOne(
 		&result.Place,
 		&orderTime,
 		&result.GeneralBill,
+		&approvedById,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -207,6 +210,32 @@ func (r *repository) GetOne(
 
 	result.Items = items
 	result.CountItems = countItems
+
+	if approvedById != nil {
+		var (
+			id       int
+			fullName string
+		)
+		err = r.client.QueryRow(ctx, `
+		SELECT id,
+		       CONCAT_WS(' ', name, last_name)
+		FROM users
+		WHERE id = $1
+	`, *approvedById).Scan(
+			&id,
+			&fullName,
+		)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, appresult.ErrNotFoundType(*approvedById, "user")
+			}
+			return nil, appresult.ErrInternalServer
+		}
+		result.ApprovedBy = &user.User{
+			Id:       id,
+			FullName: fullName,
+		}
+	}
 
 	return &result, nil
 }
@@ -405,29 +434,7 @@ func (r *repository) GetAllForBusinesses(
 		orders []order.OrdersForBusinesses
 		count  int
 		args   []interface{}
-		// role             string
-		// userBusinessesId *int
 	)
-
-	// err := r.client.QueryRow(ctx, `
-	// 	SELECT ub.role, u.businesses_id
-	// 		FROM users u
-	// 		JOIN user_businesses ub ON ub.user_id = u.id AND ub.businesses_id = u.businesses_id
-	// 		WHERE u.id = $1
-	// `, userId).Scan(&role, &userBusinessesId)
-	// if err != nil {
-	// 	if errors.Is(err, pgx.ErrNoRows) {
-	// 		return nil, appresult.ErrNotFoundType(userId, "user")
-	// 	}
-	// 	fmt.Println("error: ", err)
-	// 	return nil, appresult.ErrInternalServer
-	// }
-
-	// if role == "MANAGER" {
-	// 	if userBusinessesId == nil || *userBusinessesId != businessesId {
-	// 		return nil, appresult.ErrForbidden
-	// 	}
-	// }
 
 	limitInt, offsetInt, err := utils.ParsePagination(limitStr, offsetStr)
 	if err != nil {

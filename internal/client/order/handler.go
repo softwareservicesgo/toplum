@@ -60,7 +60,7 @@ func (h *handler) Register(router *gin.RouterGroup) {
 	router.PUT(orderForClientId, middleware.JwtTokenCheck(h.client), h.updateStatusByClient)
 	router.PUT(orderForBusinessesId, middleware.JwtTokenCheck(h.client), h.updateStatusByBusinesses)
 
-	router.GET(businessesWSURL, middleware.JwtTokenCheck(h.client), h.checkBusinesses)
+	router.GET(businessesWSURL, h.checkBusinesses)
 	router.GET(clientWSURL, middleware.JwtTokenCheck(h.client), h.checkClient)
 	router.GET(orderBusinessesWSURL, middleware.JwtTokenCheck(h.client), h.wsHandlerBusinesses)
 	router.GET(orderClientWSURL, middleware.JwtTokenCheck(h.client), h.wsHandlerClient)
@@ -157,7 +157,7 @@ func (h *handler) getAllForBusinesses(c *gin.Context) {
 		appresult.HandleError(c, err)
 		return
 	}
-	if *role != enum.RoleAdmin && *role != enum.RoleManager {
+	if *role != enum.RoleAdmin && *role != enum.RoleManager && *role != enum.RoleOperator {
 		appresult.HandleError(c, appresult.ErrForbidden)
 		return
 	}

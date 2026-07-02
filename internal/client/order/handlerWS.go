@@ -111,7 +111,6 @@ func (h *handler) checkClient(c *gin.Context) {
 		appresult.HandleError(c, err)
 		return
 	}
-
 	err = h.WSRepository.CheckClient(context.TODO(), clientId)
 	if err != nil {
 		appresult.HandleError(c, err)

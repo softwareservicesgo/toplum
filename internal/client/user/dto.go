@@ -1,4 +1,4 @@
-package clients
+package user
 
 import "restaurants/internal/admin/province"
 
@@ -66,9 +66,4 @@ type DictionaryDTO struct {
 	Tm string `json:"tm"`
 	En string `json:"en"`
 	Ru string `json:"ru"`
-}
-
-type Classification struct {
-	Id   int           `json:"id"`
-	Name DictionaryDTO `json:"name"`
 }
