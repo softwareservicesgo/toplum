@@ -428,7 +428,9 @@ func (h *handler) assignUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, "")
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "success!!!",
+	})
 }
 
 func (h *handler) extractUserIdAndRole(c *gin.Context, businessId *int) (*string, error) {

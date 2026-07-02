@@ -85,12 +85,12 @@ func (h *handler) getAll(c *gin.Context) {
 		return
 	}
 
-	page := c.Query("page")
-	size := c.Query("size")
+	limit := c.Query("limit")
+	offset := c.Query("offset")
 
 	baseURL := c.MustGet("baseURL").(string)
 
-	resp, err := h.repository.GetAll(context.TODO(), userId, page, size, baseURL)
+	resp, err := h.repository.GetAll(context.TODO(), userId, limit, offset, baseURL)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return

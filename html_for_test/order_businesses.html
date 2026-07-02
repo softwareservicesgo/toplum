@@ -60,7 +60,7 @@
 
     <script>
       const businessesId = new URLSearchParams(location.search).get(
-        "businessesId",
+        "id",
       );
 
       let ws;
@@ -74,7 +74,7 @@
 
       function connect() {
         const proto = location.protocol === "https:" ? "wss:" : "ws:";
-        const url = `${proto}//${location.host}/api/v1/order/ws/orderBusinesses/${businessesId}`;
+        const url = `${proto}//${location.host}/api/v1/order/ws/businesses/${businessesId}`;
 
         console.log("WS URL:", url);
 

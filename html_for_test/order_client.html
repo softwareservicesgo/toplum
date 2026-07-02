@@ -212,7 +212,7 @@
 
       function connect() {
         const proto = location.protocol === "https:" ? "wss:" : "ws:";
-        const url = `${proto}//${location.host}/api/v1/order/ws/orderClient`;
+        const url = `${proto}//${location.host}/api/v1/order/ws/client`;
 
         ws = new WebSocket(url);
 

@@ -9,7 +9,7 @@ import (
 	"restaurants/internal/client/basket"
 	"restaurants/pkg/client/postgresql"
 	"restaurants/pkg/logging"
-	"strconv"
+	"restaurants/pkg/utils"
 	"strings"
 
 	"github.com/jackc/pgx/v4"
@@ -83,22 +83,17 @@ func (r *repository) Create(ctx context.Context, userId int, item basket.BasketR
 	return nil
 }
 
-func (r *repository) GetAll(ctx context.Context, userId int, page string, size string, baseURL string) (*basket.BasketsAll, error) {
+func (r *repository) GetAll(ctx context.Context, userId int, limit string, offset string, baseURL string) (*basket.BasketsAll, error) {
 	var (
 		baskets []basket.Baskets
 		count   int
 	)
 
-	pageInt, err := strconv.Atoi(page)
-	if err != nil || pageInt < 1 {
-		pageInt = 1
+	limitInt, offsetInt, err := utils.ParsePagination(limit, offset)
+	if err != nil {
+		fmt.Println("error: ", err)
+		return nil, err
 	}
-
-	sizeInt, err := strconv.Atoi(size)
-	if err != nil || sizeInt < 1 {
-		sizeInt = 10
-	}
-	offset := (pageInt - 1) * sizeInt
 
 	q := `
 		FROM businesses bs
@@ -123,7 +118,7 @@ func (r *repository) GetAll(ctx context.Context, userId int, page string, size s
 						 LIMIT $2 OFFSET $3
 						`, q)
 
-	rows, err := r.client.Query(ctx, qRes, userId, sizeInt, offset)
+	rows, err := r.client.Query(ctx, qRes, userId, limitInt, offsetInt)
 	if err != nil {
 		fmt.Println("error: ", err)
 		return nil, appresult.ErrInternalServer

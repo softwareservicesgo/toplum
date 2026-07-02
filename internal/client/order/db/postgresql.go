@@ -367,7 +367,9 @@ func (r *repository) GetAllForClient(
             img.image_path,
 			o.total_price,
 			(SELECT COALESCE(SUM(quantity), 0) FROM order_items WHERE order_id = o.id) as count_items,
-			o.status
+			o.status,
+			o.place,
+			o.order_time
 		FROM orders o
 		JOIN businesses b ON o.businesses_id = b.id
 		JOIN image_businesses img ON img.businesses_id = b.id AND img.is_main = true
@@ -384,7 +386,10 @@ func (r *repository) GetAllForClient(
 	defer rows.Close()
 
 	for rows.Next() {
-		var ord order.OrderOne
+		var (
+			ord       order.OrderOne
+			orderTime time.Time
+		)
 		if err := rows.Scan(
 			&ord.Id,
 			&ord.BusinessesId,
@@ -393,6 +398,8 @@ func (r *repository) GetAllForClient(
 			&ord.GeneralBill,
 			&ord.CountItems,
 			&ord.Status,
+			&ord.Place,
+			&orderTime,
 		); err != nil {
 			fmt.Println("error: ", err)
 			return nil, appresult.ErrInternalServer
@@ -402,7 +409,7 @@ func (r *repository) GetAllForClient(
 			cleanPath := strings.ReplaceAll(ord.BusinessesImage, "\\", "/")
 			ord.BusinessesImage = fmt.Sprintf("%s/%s", baseURL, cleanPath)
 		}
-
+		ord.OrderTime = orderTime.Format(formatDayTime)
 		items, _, err := FindItemsByOrder(ctx, r, ord.Id, baseURL)
 		if err != nil {
 			return nil, err

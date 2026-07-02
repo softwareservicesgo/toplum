@@ -23,7 +23,7 @@ const (
 	orderForBusinessesId = "/businesses/:id"
 	orderForClientId     = "/client/:id"
 
-	orderBusinessesWSURL = "/ws/orderBusinesses/:businesses_id"
+	orderBusinessesWSURL = "/ws/orderBusinesses/:id"
 	orderClientWSURL     = "/ws/orderClient"
 	businessesWSURL      = "/ws/businesses/:id"
 	clientWSURL          = "/ws/client"
@@ -60,11 +60,12 @@ func (h *handler) Register(router *gin.RouterGroup) {
 	router.PUT(orderForClientId, middleware.JwtTokenCheck(h.client), h.updateStatusByClient)
 	router.PUT(orderForBusinessesId, middleware.JwtTokenCheck(h.client), h.updateStatusByBusinesses)
 
-	router.GET(businessesWSURL, h.checkBusinesses)
-	router.GET(clientWSURL, middleware.JwtTokenCheck(h.client), h.checkClient)
-	router.GET(orderBusinessesWSURL, middleware.JwtTokenCheck(h.client), h.wsHandlerBusinesses)
-	router.GET(orderClientWSURL, middleware.JwtTokenCheck(h.client), h.wsHandlerClient)
+	router.GET(orderBusinessesWSURL, h.checkBusinesses)
+	router.GET(orderClientWSURL, middleware.JwtTokenCheck(h.client), h.checkClient)
 	router.GET(OneWSURL, middleware.JwtTokenCheck(h.client), h.checkOrder)
+
+	router.GET(businessesWSURL, middleware.JwtTokenCheck(h.client), h.wsHandlerBusinesses)
+	router.GET(clientWSURL, middleware.JwtTokenCheck(h.client), h.wsHandlerClient)
 	router.GET(orderOneWSURL, middleware.JwtTokenCheck(h.client), h.wsHandlerOrderOne)
 }
 
@@ -230,7 +231,9 @@ func (h *handler) delete(c *gin.Context) {
 
 	NotifyOrderUpdate([]int{*businessesId}, *clientId, []int{orderID}, h.repository)
 
-	c.JSON(http.StatusOK, "sucessfull!!!")
+	c.JSON(http.StatusOK, gin.H{
+		"message": "success!!!",
+	})
 }
 
 func (h *handler) updateStatusByClient(c *gin.Context) {
@@ -266,7 +269,9 @@ func (h *handler) updateStatusByClient(c *gin.Context) {
 
 	NotifyOrderUpdate([]int{*businessID}, *clientId, []int{orderID}, h.repository)
 
-	c.JSON(http.StatusOK, "sucessfull!!!")
+	c.JSON(http.StatusOK, gin.H{
+		"message": "success!!!",
+	})
 }
 
 func (h *handler) updateStatusByBusinesses(c *gin.Context) {
@@ -307,7 +312,9 @@ func (h *handler) updateStatusByBusinesses(c *gin.Context) {
 
 	NotifyOrderUpdate([]int{*businessID}, *clientId, []int{orderID}, h.repository)
 
-	c.JSON(http.StatusOK, "sucessfull!!!")
+	c.JSON(http.StatusOK, gin.H{
+		"message": "success!!!",
+	})
 }
 
 func (h *handler) extractUserIdAndRole(c *gin.Context, businessesId *int) (*int, *string, error) {

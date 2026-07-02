@@ -27,6 +27,7 @@ func (h *handler) checkBusinesses(c *gin.Context) {
 		appresult.HandleError(c, err)
 		return
 	}
+
 	userId, err := utils.ExtractUserIdFromToken(c, h.client)
 	if err != nil {
 		appresult.HandleError(c, err)
@@ -43,13 +44,19 @@ func (h *handler) checkBusinesses(c *gin.Context) {
 }
 
 func (h *handler) wsHandlerBusinesses(c *gin.Context) {
-	businessesId, err := strconv.Atoi(c.Param("businesses_id"))
+	businessesId, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
 	}
 
 	userId, err := utils.ExtractUserIdFromToken(c, h.client)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	err = h.WSRepository.CheckBusinesses(context.TODO(), businessesId, userId)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -111,6 +118,7 @@ func (h *handler) checkClient(c *gin.Context) {
 		appresult.HandleError(c, err)
 		return
 	}
+
 	err = h.WSRepository.CheckClient(context.TODO(), clientId)
 	if err != nil {
 		appresult.HandleError(c, err)
@@ -122,6 +130,12 @@ func (h *handler) checkClient(c *gin.Context) {
 
 func (h *handler) wsHandlerClient(c *gin.Context) {
 	clientId, err := utils.ExtractUserIdFromToken(c, h.client)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	err = h.WSRepository.CheckClient(context.TODO(), clientId)
 	if err != nil {
 		appresult.HandleError(c, err)
 		return
@@ -190,6 +204,13 @@ func (h *handler) checkOrder(c *gin.Context) {
 
 func (h *handler) wsHandlerOrderOne(c *gin.Context) {
 	orderId, _ := strconv.Atoi(c.Param("id"))
+
+	err := h.WSRepository.CheckOrder(context.TODO(), orderId)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
 	baseURL := c.MustGet("baseURL").(string)
 
 	role := c.Query("role")
