@@ -60,7 +60,7 @@ func (h *handler) Register(router *gin.RouterGroup) {
 	router.PUT(orderForClientId, middleware.JwtTokenCheck(h.client), h.updateStatusByClient)
 	router.PUT(orderForBusinessesId, middleware.JwtTokenCheck(h.client), h.updateStatusByBusinesses)
 
-	router.GET(orderBusinessesWSURL, h.checkBusinesses)
+	router.GET(orderBusinessesWSURL, middleware.JwtTokenCheck(h.client), h.checkBusinesses)
 	router.GET(orderClientWSURL, middleware.JwtTokenCheck(h.client), h.checkClient)
 	router.GET(OneWSURL, middleware.JwtTokenCheck(h.client), h.checkOrder)
 

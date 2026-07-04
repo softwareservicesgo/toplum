@@ -10,4 +10,7 @@ type Repository interface {
 	GetProfile(ctx context.Context, clientID int, baseURL string) (*Profile, error)
 	UpdateProfile(ctx context.Context, clientID int, client UserReqDTO, imagePath *string, hashPassword string, baseURL string) (*Profile, error)
 	Logout(ctx context.Context, token string) error
+	SearchUsers(ctx context.Context, name, phoneNumber, limit, offset string, baseURL string) (*SearchUserAll, error)
+	UpdateStatusBusinessesRole(ctx context.Context, userId, userBusinessesId int, request UpdateBusinessesRoleStatusReq) error
+	GetAllUsers(ctx context.Context, businessesId int, filter UserFilter, baseURL string) (*GetAllUser, error)
 }

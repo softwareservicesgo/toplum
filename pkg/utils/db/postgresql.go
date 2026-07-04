@@ -36,7 +36,7 @@ func (r *repository) UserRoleById(ctx context.Context, userId int, businessesId 
 	query := `
 		SELECT role
 		FROM user_businesses
-		WHERE (user_id = $1 AND role = $2 ) 
+		WHERE (user_id = $1 AND role = $2 AND status = 'APPROVED') 
 		   OR (user_id = $1 AND businesses_id = $3)
 
 	`

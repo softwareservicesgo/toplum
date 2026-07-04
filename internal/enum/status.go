@@ -37,3 +37,14 @@ func IsValidStatusOrder(status string) bool {
 	_, ok := StatusOrder[status]
 	return ok
 }
+
+var StatusBusinessesRole = map[string]struct{}{
+	APPROVED: {},
+	PENDING:  {},
+	CANCELED: {},
+}
+
+func IsValidStatusBusinessesRole(status string) bool {
+	_, ok := StatusBusinessesRole[status]
+	return ok
+}

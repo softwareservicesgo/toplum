@@ -17,9 +17,6 @@ import (
 	businesses "restaurants/internal/admin/businesses"
 	businessesdb "restaurants/internal/admin/businesses/db"
 
-	user "restaurants/internal/admin/user"
-	userdb "restaurants/internal/admin/user/db"
-
 	itemCategory "restaurants/internal/admin/itemCategory"
 	itemCategorydb "restaurants/internal/admin/itemCategory/db"
 
@@ -66,7 +63,6 @@ const (
 	provinceURL     = "/api/v1/province"
 	subcategoryURL  = "/api/v1/subcategory"
 	businessesURL   = "/api/v1/businesses"
-	userAdminURL    = "/api/v1/userAdmin"
 	smsSocketURL    = "/api/v1/sms_socket"
 	typeURL         = "/api/v1/type"
 	itemCategoryURL = "/api/v1/itemCategory"
@@ -124,11 +120,6 @@ func Manager(client *pgxpool.Pool, logger *logging.Logger, smsSender *sms_sender
 	subcategoryRepository := subcategorydb.NewRepository(client, logger)
 	subcategoryRouterHandler := subcategory.NewHandler(logger, subcategoryRepository, utilRepository, client)
 	subcategoryRouterHandler.Register(subcategoryRouterManager)
-
-	userRouterManager := router.Group(userAdminURL)
-	userRepository := userdb.NewRepository(client, logger)
-	userRouterHandler := user.NewHandler(logger, userRepository, utilRepository, client)
-	userRouterHandler.Register(userRouterManager)
 
 	smsSocketRouter := router.Group(smsSocketURL)
 	smsSocket := sms_socket.NewHandler(logger, smsSender)

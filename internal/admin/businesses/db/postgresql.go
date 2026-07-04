@@ -159,9 +159,9 @@ func (r *repository) Create(ctx context.Context, userId int, dto businesses.Busi
 
 	query = `
 		INSERT INTO user_businesses
-			(user_id, businesses_id, role)
+			(user_id, businesses_id, role, status)
 		VALUES
-			($1, $2, $3)
+			($1, $2, $3, 'PENDING')
 	`
 	_, err = tx.Exec(ctx, query,
 		userId, businessId, enum.RoleManager)
@@ -829,7 +829,7 @@ func (r *repository) UpdateStatus(ctx context.Context, businessId int, status bu
 		return appresult.ErrStatus
 	}
 
-	if strings.HasPrefix(status.Status, "CANCELED") && status.Reason == "" {
+	if status.Status == enum.CANCELED && status.Reason == "" {
 		return appresult.ErrReason
 	}
 
@@ -837,6 +837,17 @@ func (r *repository) UpdateStatus(ctx context.Context, businessId int, status bu
 		UPDATE businesses
 		SET status = $1, reason = $2, updated_at = now()
 		WHERE id = $3
+	`, status.Status, status.Reason, businessId)
+
+	if err != nil {
+		fmt.Println(err)
+		return appresult.ErrInternalServer
+	}
+
+	_, err = r.client.Exec(ctx, `
+		UPDATE user_businesses
+		SET status = $1, reason = $2
+		WHERE businesses_id = $3 AND role = 'MANAGER' AND status = 'PENDING'
 	`, status.Status, status.Reason, businessId)
 
 	if err != nil {
@@ -1027,9 +1038,29 @@ func findBusinessesForIndex(
 }
 
 func (r *repository) AssignUser(ctx context.Context, businessesId int, request businesses.AssignUser) error {
-	var exists bool
+	var exists, existClient bool
 
 	query := `
+		SELECT EXISTS(
+			SELECT 1
+			FROM users
+			WHERE id = $1
+		)
+	`
+	err := r.client.QueryRow(
+		ctx,
+		query,
+		request.UserId,
+	).Scan(&existClient)
+	if err != nil {
+		fmt.Println("error:", err)
+		return appresult.ErrInternalServer
+	}
+	if !existClient {
+		return appresult.ErrNotFoundType(request.UserId, "user")
+	}
+
+	query = `
 		SELECT EXISTS(
 			SELECT 1
 			FROM user_businesses
@@ -1038,8 +1069,7 @@ func (r *repository) AssignUser(ctx context.Context, businessesId int, request b
 				AND role = $3
 		)
 	`
-
-	err := r.client.QueryRow(
+	err = r.client.QueryRow(
 		ctx,
 		query,
 		businessesId,
@@ -1050,15 +1080,38 @@ func (r *repository) AssignUser(ctx context.Context, businessesId int, request b
 		fmt.Println("error:", err)
 		return appresult.ErrInternalServer
 	}
+
 	if exists {
-		return appresult.ErrAlreadyData("user in the businesses")
+		query = `
+			UPDATE user_businesses
+			SET
+				status = 'PENDING',
+				reason = NULL
+			WHERE businesses_id = $1
+				AND user_id = $2
+				AND role = $3
+		`
+
+		_, err = r.client.Exec(
+			ctx,
+			query,
+			businessesId,
+			request.UserId,
+			request.Role,
+		)
+		if err != nil {
+			fmt.Println("error:", err)
+			return appresult.ErrInternalServer
+		}
+
+		return nil
 	}
 
 	query = `
 		INSERT INTO user_businesses
-			(user_id, businesses_id, role)
+			(user_id, businesses_id, role, status)
 		VALUES
-			($1, $2, $3)
+			($1, $2, $3, 'PENDING')
 	`
 
 	_, err = r.client.Exec(

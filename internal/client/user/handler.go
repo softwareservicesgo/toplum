@@ -9,11 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"restaurants/internal/appresult"
+	"restaurants/internal/enum"
 	"restaurants/internal/handlers"
 	"restaurants/internal/middleware"
 	"restaurants/pkg/logging"
 	"restaurants/pkg/sms_sender"
 	"restaurants/pkg/utils"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -23,9 +25,11 @@ const (
 	registerURL = "/registration"
 	checkOTP    = "/checkOTP"
 	loginURL    = "/login"
-	profile     = "/profile"
-	logout      = "/logout"
-	clientURL   = ""
+	profileURL  = "/profile"
+	logoutURL   = "/logout"
+	searchURL   = "/search"
+	URL         = ""
+	byIdURL     = "/:id"
 )
 
 type handler struct {
@@ -51,10 +55,13 @@ func (h *handler) Register(router *gin.RouterGroup) {
 	router.POST(registerURL, h.register)
 	router.POST(checkOTP, h.checkOTP)
 	router.POST(loginURL, h.login)
-	router.POST(profile, middleware.JwtTokenCheck(h.client), h.createProfile)
-	router.GET(profile, middleware.JwtTokenCheck(h.client), h.getProfile)
-	router.PUT(clientURL, middleware.JwtTokenCheck(h.client), h.update)
-	router.POST(logout, middleware.JwtTokenCheck(h.client), h.logout)
+	router.POST(profileURL, middleware.JwtTokenCheck(h.client), h.createProfile)
+	router.GET(profileURL, middleware.JwtTokenCheck(h.client), h.getProfile)
+	router.PUT(URL, middleware.JwtTokenCheck(h.client), h.update)
+	router.POST(logoutURL, middleware.JwtTokenCheck(h.client), h.logout)
+	router.GET(searchURL, middleware.JwtTokenCheck(h.client), h.searchUsers)
+	router.PUT(byIdURL, middleware.JwtTokenCheck(h.client), h.updateStatusBusinessesRole)
+	router.GET(byIdURL, middleware.JwtTokenCheck(h.client), h.getUsers)
 }
 
 func (h *handler) register(c *gin.Context) {
@@ -306,4 +313,82 @@ func (h *handler) logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "success!!!",
 	})
+}
+
+func (h *handler) searchUsers(c *gin.Context) {
+
+	name := c.Query("name")
+	phoneNumber := c.Query("phone_number")
+	limit := c.Query("limit")
+	offset := c.Query("offset")
+
+	baseURL := c.MustGet("baseURL").(string)
+
+	resp, err := h.repository.SearchUsers(context.TODO(), name, phoneNumber, limit, offset, baseURL)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *handler) updateStatusBusinessesRole(c *gin.Context) {
+	var (
+		request UpdateBusinessesRoleStatusReq
+	)
+
+	userBusinessesId, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	userId, err := utils.ExtractUserIdFromToken(c, h.client)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	if !enum.IsValidStatusBusinessesRole(request.Status) {
+		appresult.HandleError(c, appresult.ErrStatus)
+		return
+	}
+
+	err = h.repository.UpdateStatusBusinessesRole(context.TODO(), userId, userBusinessesId, request)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "success!!!",
+	})
+}
+
+func (h *handler) getUsers(c *gin.Context) {
+	var filter UserFilter
+
+	businessesId, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	_ = c.ShouldBindQuery(&filter)
+
+	baseURL := c.MustGet("baseURL").(string)
+
+	resp, err := h.repository.GetAllUsers(context.TODO(), businessesId, filter, baseURL)
+	if err != nil {
+		appresult.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }

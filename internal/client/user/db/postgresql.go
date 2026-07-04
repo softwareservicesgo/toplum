@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"restaurants/internal/appresult"
 	user "restaurants/internal/client/user"
+	"restaurants/internal/enum"
 	"restaurants/pkg/client/postgresql"
 	"restaurants/pkg/logging"
 	"restaurants/pkg/utils"
@@ -217,7 +218,7 @@ func (r *repository) GetProfile(ctx context.Context, userId int, baseURL string)
 	}
 
 	q = `
-		SELECT ub.id, ub.businesses_id, b.name, ub.role, img.image_path
+		SELECT ub.id, ub.businesses_id, b.name, ub.role, img.image_path, ub.status, ub.reason
 		FROM user_businesses ub
 		JOIN businesses b ON ub.businesses_id = b.id
 		JOIN image_businesses img ON img.businesses_id = b.id AND img.is_main = true
@@ -239,6 +240,8 @@ func (r *repository) GetProfile(ctx context.Context, userId int, baseURL string)
 			&organization.BusinessesName,
 			&organization.Role,
 			&organization.BusinessesImage,
+			&organization.Status,
+			&organization.Reason,
 		)
 		if err != nil {
 			return nil, err
@@ -306,4 +309,253 @@ func (r *repository) Logout(ctx context.Context, token string) error {
 	}
 
 	return nil
+}
+
+func (r *repository) SearchUsers(ctx context.Context, name, phoneNumber, limitStr, offsetStr, baseURL string) (*user.SearchUserAll, error) {
+	var result user.SearchUserAll
+
+	limit, offset, err := utils.ParsePagination(limitStr, offsetStr)
+	if err != nil {
+		fmt.Println("error: ", err)
+		return nil, appresult.ErrInternalServer
+	}
+
+	where := "WHERE 1=1"
+	args := []interface{}{}
+	argIdx := 1
+
+	name = strings.TrimSpace(name)
+	if name != "" {
+		parts := strings.Fields(name)
+
+		for _, part := range parts {
+			where += fmt.Sprintf(
+				" AND (u.name ILIKE $%d OR COALESCE(u.last_name, '') ILIKE $%d)",
+				argIdx, argIdx+1,
+			)
+
+			like := "%" + part + "%"
+			args = append(args, like, like)
+			argIdx += 2
+		}
+	}
+
+	phoneNumber = strings.TrimSpace(phoneNumber)
+	if phoneNumber != "" {
+		where += fmt.Sprintf(" AND u.phone_number ILIKE $%d", argIdx)
+		args = append(args, "%"+phoneNumber+"%")
+		argIdx++
+	}
+
+	countQ := `SELECT COUNT(*) FROM users u ` + where
+	if err := r.client.QueryRow(ctx, countQ, args...).Scan(&result.Count); err != nil {
+		fmt.Println("error: ", err)
+		return nil, appresult.ErrInternalServer
+	}
+
+	if result.Count == 0 {
+		result.Users = []user.SearchUser{}
+		return &result, nil
+	}
+
+	dataQ := fmt.Sprintf(`
+		SELECT 
+			u.id,
+			TRIM(u.name || ' ' || COALESCE(u.last_name, '')) AS full_name,
+			u.phone_number,
+			u.image_path
+		FROM users u
+		%s
+		ORDER BY u.id DESC
+		LIMIT $%d OFFSET $%d
+	`, where, argIdx, argIdx+1)
+
+	dataArgs := append(args, limit, offset)
+
+	rows, err := r.client.Query(ctx, dataQ, dataArgs...)
+	if err != nil {
+		fmt.Println("error: ", err)
+		return nil, appresult.ErrInternalServer
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var u user.SearchUser
+		if err := rows.Scan(&u.Id, &u.FullName, &u.PhoneNumber, &u.ImagePath); err != nil {
+			fmt.Println("error: ", err)
+			return nil, appresult.ErrInternalServer
+		}
+
+		if u.ImagePath != nil && *u.ImagePath != "" && baseURL != "" {
+			cleanPath := strings.ReplaceAll(*u.ImagePath, "\\", "/")
+			newUrl := fmt.Sprintf("%s/%s", baseURL, cleanPath)
+			u.ImagePath = &newUrl
+		}
+
+		result.Users = append(result.Users, u)
+	}
+	if err := rows.Err(); err != nil {
+		fmt.Println("error: ", err)
+		return nil, appresult.ErrInternalServer
+	}
+
+	return &result, nil
+}
+
+func (r *repository) UpdateStatusBusinessesRole(ctx context.Context, userId, userBusinessesId int, request user.UpdateBusinessesRoleStatusReq) error {
+
+	var currentStatus string
+
+	query := `
+				SELECT status
+			FROM user_businesses 
+			WHERE id = $1 AND user_id = $2
+		`
+
+	err := r.client.QueryRow(ctx, query, userBusinessesId, userId).Scan(&currentStatus)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			content := fmt.Sprintf("user_businesses with user = %d, user_businesses", userId)
+			return appresult.ErrNotFoundType(userBusinessesId, content)
+		}
+		fmt.Println("error: ", err)
+		return appresult.ErrInternalServer
+	}
+
+	if currentStatus != enum.PENDING {
+		return appresult.ErrStatus
+	}
+
+	if request.Reason != "" && request.Status == enum.CANCELED && len(request.Reason) > 150 {
+		return appresult.ErrOverLimit(150, "reason")
+	}
+
+	q := `
+		UPDATE user_businesses
+			SET status=$1, reason=$2
+			WHERE id=$3
+		`
+
+	_, err = r.client.Exec(ctx, q, request.Status, request.Reason, userBusinessesId)
+
+	if err != nil {
+		fmt.Println("error: ", err)
+		return appresult.ErrInternalServer
+	}
+
+	return nil
+}
+
+func (r *repository) GetAllUsers(ctx context.Context, businessesId int, filter user.UserFilter, baseURL string) (*user.GetAllUser, error) {
+	var result user.GetAllUser
+
+	limit, offset, err := utils.ParsePagination(filter.Limit, filter.Offset)
+	if err != nil {
+		fmt.Println("error: ", err)
+		return nil, appresult.ErrInternalServer
+	}
+
+	where := "WHERE ub.businesses_id = $1"
+	args := []interface{}{businessesId}
+	argIdx := 2
+
+	search := strings.TrimSpace(filter.Search)
+	if search != "" {
+		like := "%" + search + "%"
+		where += fmt.Sprintf(
+			` AND (
+			u.name ILIKE $%d
+			OR COALESCE(u.last_name, '') ILIKE $%d
+			OR u.phone_number ILIKE $%d
+		)`,
+			argIdx, argIdx+1, argIdx+2,
+		)
+		args = append(args, like, like, like)
+		argIdx += 3
+	}
+
+	role := strings.TrimSpace(filter.Role)
+	if role != "" {
+		where += fmt.Sprintf(" AND ub.role = $%d", argIdx)
+		args = append(args, role)
+		argIdx++
+	}
+
+	status := strings.TrimSpace(filter.Status)
+	if status != "" {
+		where += fmt.Sprintf(" AND ub.status = $%d", argIdx)
+		args = append(args, status)
+		argIdx++
+	}
+
+	countQ := `
+		SELECT COUNT(*) 
+		FROM users u
+		JOIN user_businesses ub ON ub.user_id = u.id
+		` + where
+
+	if err := r.client.QueryRow(ctx, countQ, args...).Scan(&result.Count); err != nil {
+		fmt.Println("error: ", err)
+		return nil, appresult.ErrInternalServer
+	}
+
+	if result.Count == 0 {
+		result.Users = []user.Users{}
+		return &result, nil
+	}
+
+	dataQ := fmt.Sprintf(`
+		SELECT 
+			u.id,
+			TRIM(u.name || ' ' || COALESCE(u.last_name, '')) AS full_name,
+			u.phone_number,
+			u.image_path,
+			ub.role,
+			ub.status,
+			ub.reason
+		FROM users u
+		JOIN user_businesses ub ON ub.user_id = u.id
+		%s
+		ORDER BY u.id DESC
+		LIMIT $%d OFFSET $%d
+	`, where, argIdx, argIdx+1)
+
+	dataArgs := append(args, limit, offset)
+
+	rows, err := r.client.Query(ctx, dataQ, dataArgs...)
+	if err != nil {
+		fmt.Println("error: ", err)
+		return nil, appresult.ErrInternalServer
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var u user.Users
+		if err := rows.Scan(
+			&u.Id,
+			&u.FullName,
+			&u.PhoneNumber,
+			&u.ImagePath,
+			&u.Role,
+			&u.Status,
+			&u.Reason,
+		); err != nil {
+			fmt.Println("error: ", err)
+			return nil, appresult.ErrInternalServer
+		}
+
+		if u.ImagePath != nil && *u.ImagePath != "" && baseURL != "" {
+			cleanPath := strings.ReplaceAll(*u.ImagePath, "\\", "/")
+			newUrl := fmt.Sprintf("%s/%s", baseURL, cleanPath)
+			u.ImagePath = &newUrl
+		}
+
+		result.Users = append(result.Users, u)
+	}
+	if err := rows.Err(); err != nil {
+		fmt.Println("error: ", err)
+		return nil, appresult.ErrInternalServer
+	}
+
+	return &result, nil
 }

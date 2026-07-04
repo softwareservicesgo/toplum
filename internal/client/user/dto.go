@@ -2,6 +2,14 @@ package user
 
 import "restaurants/internal/admin/province"
 
+type UserFilter struct {
+	Role   string `form:"role"`
+	Search string `form:"search"`
+	Limit  string `form:"limit"`
+	Offset string `form:"offset"`
+	Status string `form:"status"`
+}
+
 type RegisterDTO struct {
 	PhoneNumber string `json:"phone_number" binding:"required"`
 }
@@ -45,21 +53,49 @@ type Profile struct {
 }
 
 type Organization struct {
-	Id              int    `json:"id"`
-	BusinessesId    int    `json:"businesses_id"`
-	BusinessesName  string `json:"businesses_name"`
-	BusinessesImage string `json:"businesses_image"`
-	Role            string `json:"role"`
+	Id              int     `json:"id"`
+	BusinessesId    int     `json:"businesses_id"`
+	BusinessesName  string  `json:"businesses_name"`
+	BusinessesImage string  `json:"businesses_image"`
+	Role            string  `json:"role"`
+	Status          string  `json:"status"`
+	Reason          *string `json:"reason"`
 }
-
-type CountAndUsers struct {
-	Count int       `json:"count"`
-	Users []Profile `json:"Users"`
-}
-
 type User struct {
 	Id       int    `json:"id"`
 	FullName string `json:"fullName"`
+}
+
+type SearchUser struct {
+	Id          int     `json:"id"`
+	FullName    string  `json:"fullName"`
+	PhoneNumber string  `json:"phone_number"`
+	ImagePath   *string `json:"image_path"`
+}
+
+type SearchUserAll struct {
+	Count int          `json:"count"`
+	Users []SearchUser `json:"users"`
+}
+
+type Users struct {
+	Id          int     `json:"id"`
+	FullName    string  `json:"fullName"`
+	PhoneNumber string  `json:"phone_number"`
+	ImagePath   *string `json:"image_path"`
+	Role        string  `json:"role"`
+	Status      string  `json:"status"`
+	Reason      *string `json:"reason"`
+}
+
+type GetAllUser struct {
+	Count int     `json:"count"`
+	Users []Users `json:"users"`
+}
+
+type UpdateBusinessesRoleStatusReq struct {
+	Status string `json:"status" binding:"required"`
+	Reason string `json:"reason"`
 }
 
 type DictionaryDTO struct {

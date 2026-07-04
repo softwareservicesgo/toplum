@@ -60,7 +60,7 @@ func (h *handler) Register(router *gin.RouterGroup) {
 	router.GET(businessesURL, middleware.JwtTokenCheck(h.client), h.getAll)
 	router.PATCH(businessesById, middleware.JwtTokenCheck(h.client), h.update)
 	router.DELETE(businessesById, middleware.JwtTokenCheck(h.client), h.delete)
-	router.PATCH(businessesStatusById, middleware.JwtTokenCheck(h.client), h.updateSatus)
+	router.PUT(businessesStatusById, middleware.JwtTokenCheck(h.client), h.updateSatus)
 	router.GET(businessesIndex, middleware.JwtTokenCheck(h.client), h.index)
 	router.POST(assignUser, middleware.JwtTokenCheck(h.client), h.assignUser)
 }
@@ -326,6 +326,11 @@ func (h *handler) updateSatus(c *gin.Context) {
 		return
 	}
 
+	if !enum.IsValidStatusBusinesses(status.Status) {
+		appresult.HandleError(c, appresult.ErrStatus)
+		return
+	}
+
 	err = h.repository.UpdateStatus(context.TODO(), businessId, status)
 	if err != nil {
 		appresult.HandleError(c, err)
@@ -416,7 +421,6 @@ func (h *handler) assignUser(c *gin.Context) {
 		return
 	}
 
-	fmt.Println(request.Role)
 	if !enum.IsValidRole(request.Role) {
 		appresult.HandleError(c, appresult.ErrRole)
 		return
